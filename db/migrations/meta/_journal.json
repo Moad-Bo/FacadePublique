@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1774477184704,
+      "tag": "0000_far_ricochet",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1775601538172,
+      "tag": "0001_whole_korg",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1775602387625,
+      "tag": "0002_tranquil_imperial_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1775614340303,
+      "tag": "0003_last_slayback",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1776808831272,
+      "tag": "0004_lazy_pretty_boy",
+      "breakpoints": true
+    }
+  ]
+}

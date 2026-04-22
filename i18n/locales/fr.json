@@ -1,0 +1,62 @@
+{
+  "nav": {
+    "solutions": "SOLUTIONS",
+    "services": "SERVICES",
+    "resources": "RESSOURCES",
+    "docs": "DOCS",
+    "blog": "BLOG",
+    "basis_doc": "Documentation Basis",
+    "khora_doc": "Documentation Khora",
+    "keryx_doc": "Documentation Keryx",
+    "argos_doc": "Documentation Argos",
+    "syn_doc": "Documentation Syn",
+    "talos_doc": "Documentation Talos",
+    "features": "Fonctionnalités",
+    "models": "Modèles",
+    "expertise": "Expertises",
+    "infra": "Infrastructures",
+    "all_articles": "Tous les articles",
+    "tech_news": "News Techniques",
+    "global_doc": "Documentation Globale",
+    "help_center": "Help Center",
+    "partners": "Partenaires",
+    "changelog": "Changelog",
+    "socials": "Réseaux Sociaux",
+    "login": "Se connecter",
+    "signin": "Se connecter",
+    "my_account": "Mon compte",
+    "profile": "Profil",
+    "dashboard": "Dashboard",
+    "logout": "Se déconnecter",
+    "home": "Synthèse",
+    "inbox": "Messagerie",
+    "archive": "Archive",
+    "trash": "Corbeille",
+    "customers": "Clients",
+    "user_management": "Gestion Utilisateurs",
+    "settings": "Paramètres",
+    "notifications": "Notifications",
+    "help_support": "Aide & Support"
+  },
+  "search": {
+    "placeholder": "Rechercher produits, docs, blog...",
+    "suggestions": "Suggestions",
+    "site_services": "Site & Services",
+    "documentation": "Documentation",
+    "navigate": "Naviguer",
+    "open": "Ouvrir",
+    "close": "Fermer"
+  },
+  "common": {
+    "accept": "Accepter",
+    "refuse": "Refuser"
+  },
+  "cookie": {
+    "consent_title": "Gestion des Cookies"
+  },
+  "studio": {
+    "tooltips": {
+      "toggleStudio": "Activer le Studio"
+    }
+  }
+}

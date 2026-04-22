@@ -1,0 +1,82 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+/* --- ACCESSIBILITY FONTS --- */
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/dist/OpenDyslexic-Regular.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* --- FONT UTILITIES & OVERRIDES --- */
+:root {
+  --font-family: inherit;
+}
+
+/* Force inheritance for all children if a font class is set on html */
+html[class*="font-"] * {
+  font-family: inherit !important;
+}
+
+.font-dyslexic {
+  font-family: 'OpenDyslexic', sans-serif !important;
+}
+
+.font-sans {
+  font-family: 'Inter', 'Roboto', ui-sans-serif, system-ui, sans-serif !important;
+}
+
+.font-serif {
+  font-family: 'Playfair Display', 'Georgia', serif !important;
+}
+
+.font-mono {
+  font-family: 'Fira Code', 'monospace' !important;
+}
+
+.font-comic {
+  font-family: 'Comic Sans MS', 'Comic Sans', cursive !important;
+}
+
+.font-arial {
+  font-family: 'Arial', sans-serif !important;
+}
+
+/* --- ACCESSIBILITY BOOSTER --- */
+:root {
+  --focus-ring-color: #3b82f6; /* Default Blue 500 */
+}
+
+/* Clearer Focus Ring for Keyboard Navigation */
+:focus-visible {
+  outline: 2px solid var(--focus-ring-color) !important;
+  outline-offset: 2px !important;
+}
+
+/* Base Text Improvements */
+body {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* High Contrast Utility */
+.high-contrast {
+  --primary: #000;
+  --neutral: #000;
+  filter: contrast(1.2);
+}
+
+.dark .high-contrast {
+  --primary: #fff;
+  --neutral: #fff;
+  filter: contrast(1.5);
+}
+
+/* Font Size Utilities based on User Requirement */
+.text-size-sm { font-size: 0.875rem; line-height: 1.25rem; }
+.text-size-base { font-size: 1rem; line-height: 1.5rem; }
+.text-size-lg { font-size: 1.125rem; line-height: 1.75rem; }
+.text-size-xl { font-size: 1.25rem; line-height: 1.75rem; }
+
