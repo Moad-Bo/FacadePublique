@@ -14,6 +14,12 @@ export interface ScheduleOptions {
     timezone?: string;
     layoutId?: string;
     fromContext?: string;
+    html?: string;
+    type?: string;
+    template?: string;
+    scheduledAt?: Date;
+    recurrence?: string;
+    recurrenceValue?: string;
 }
 
 /**
@@ -96,6 +102,15 @@ export async function processQueue() {
     const now = new Date();
     const fiveMinutesAgo = new Date(now.getTime() - 5 * 60000);
 
+    // 0. Purge old email logs (older than 7 days)
+    try {
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const { emailLog } = await import("../../drizzle/src/db/schema");
+        await db.delete(emailLog).where(lt(emailLog.sentAt, sevenDaysAgo));
+    } catch (e) {
+        console.error('[Scheduler] Failed to purge old email logs:', e);
+    }
+
     const pending = await db.select()
         .from(emailQueue)
         .where(
@@ -154,13 +169,13 @@ export async function processQueue() {
 
                 // 6. Intelligent Background Update: Update Campaign Progress
                 if (item.type === "newsletter" && item.template) {
-                    const { newsletterCampaign } = await import("../../drizzle/src/db/schema");
-                    await db.update(newsletterCampaign)
+                    const { campaign } = await import("../../drizzle/src/db/schema");
+                    await db.update(campaign)
                         .set({ 
                             sentAt: new Date(),
-                            totalRecipients: sql`${newsletterCampaign.totalRecipients} + 1` 
+                            totalRecipients: sql`${campaign.totalRecipients} + 1` 
                         })
-                        .where(eq(newsletterCampaign.id, item.template));
+                        .where(eq(campaign.id, item.template));
                 }
 
                 // 7. Handle recurrence

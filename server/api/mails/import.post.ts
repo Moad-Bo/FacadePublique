@@ -33,6 +33,7 @@ export default defineEventHandler(async (event) => {
                 userId: session.user.id,
                 subject: m.subject || '(Sans objet)',
                 body: m.body || '',
+                isHtml: m.isHtml !== undefined ? m.isHtml : /<[a-zA-Z][^>]*>/.test(m.body || ''),
                 fromEmail: m.fromEmail || 'unknown@imported.com',
                 fromName: m.fromName || 'Imported User',
                 date: m.date ? new Date(m.date) : new Date(),

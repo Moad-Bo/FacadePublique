@@ -176,11 +176,11 @@ export const awsAssetsService = {
    * Mappe une liste d'assets pour ajouter les URLs résolues.
    * Signature CloudFront pour les privés, URL publique pour le reste.
    */
-  mapAssets(assets: { s3Key?: string; r2Key?: string; type?: string }[]): any[] {
+  mapAssets(assets: { s3Key?: string; type?: string }[]): any[] {
     const PRIVATE_TYPES = new Set(['legal', 'mailbox_attachment', 'private_document', 'invoice']);
 
     return assets.map(asset => {
-      const key = asset.s3Key || asset.r2Key;
+      const key = asset.s3Key;
       if (!key) return { ...asset, url: '' };
 
       const isPrivate = PRIVATE_TYPES.has(asset.type || '');

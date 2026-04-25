@@ -11,11 +11,10 @@ const props = defineProps<{
 const emit = defineEmits(['tab-change']);
 
 const navigation = [
-  { label: 'Identité', icon: 'i-lucide-user', tab: 'identity' },
-  { label: 'Apparence', icon: 'i-lucide-palette', tab: 'appearance' },
+  { label: 'Mon Profil', icon: 'i-lucide-user', tab: 'identity' },
+  { label: 'Personnalisation', icon: 'i-lucide-palette', tab: 'appearance' },
   { label: 'Communauté', icon: 'i-lucide-users', tab: 'community' },
-  { label: 'Notifications', icon: 'i-lucide-bell', tab: 'notifications' },
-  // Only show security in public for now or as needed
+  { label: 'Communication', icon: 'i-lucide-bell', tab: 'notifications' },
   { label: 'Sécurité', icon: 'i-lucide-shield-check', tab: 'security' }
 ];
 

@@ -1,14 +1,15 @@
 import { ref, computed } from 'vue'
+import { useSessionStorage } from '@vueuse/core'
 
 export const useComposer = () => {
   const notify = useNotify()
 
   // ─── STATE ──────────────────────────────────────────────────────────────────
-  const isComposerOpen = useState('composer-open', () => false)
-  const composerMode = useState<'new_message' | 'layout' | 'automation' | 'newsletter' | 'import_export' | 'blacklist_mgmt'>('composer-mode', () => 'new_message')
-  const composerStep = useState('composer-step', () => 1)
+  const isComposerOpen = useSessionStorage('composer-open', false)
+  const composerMode = useSessionStorage<'new_message' | 'layout' | 'automation' | 'newsletter' | 'import_export' | 'blacklist_mgmt'>('composer-mode', 'new_message')
+  const composerStep = useSessionStorage('composer-step', 1)
   const isComposerLoading = useState('composer-loading', () => false)
-  const isReplyMode = useState('composer-is-reply', () => false)
+  const isReplyMode = useSessionStorage('composer-is-reply', false)
   
   // EML Import State
   const pendingMails = useState<any[]>('composer-pending-mails', () => [])
@@ -136,7 +137,7 @@ export const useComposer = () => {
   const saveCampaign = async (action: 'publish' | 'draft' = 'publish') => {
     isComposerLoading.value = true
     try {
-      const res = await $fetch<any>('/api/newsletter/campaigns', {
+      const res = await $fetch<any>('/api/campaign/campaigns', {
         method: 'POST',
         body: {
           ...composerForm.value,
@@ -212,7 +213,7 @@ export const useComposer = () => {
         filename: file.name,
         contentType: file.type,
         size: file.size,
-        r2Key: key,
+        s3Key: key,
         publicUrl
       })
 

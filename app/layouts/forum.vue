@@ -7,13 +7,13 @@ onMounted(() => {
 
 <template>
   <div class="min-h-screen bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 font-sans selection:bg-primary-500/30">
-    <!-- Forum Header -->
-    <ForumHeader />
+    <!-- Community Header -->
+    <CommunityHeader />
 
     <div class="container mx-auto px-4 md:px-6">
       <div class="flex gap-8 min-h-[calc(100vh-3.5rem)]">
         <!-- Sidebar -->
-        <ForumSidebar />
+        <CommunitySidebar />
 
         <!-- Main Content -->
         <main class="flex-1 min-w-0 py-6">

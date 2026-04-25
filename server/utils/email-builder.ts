@@ -45,6 +45,55 @@ export function sanitizeEmailHtml(html: string): string {
 }
 
 /**
+ * Atomic Brand & Style Configuration.
+ * Centralizing these values ensures they are injected into any layout (DB or fallback).
+ */
+const BRAND_CONFIG = {
+    name: 'Techknè Group',
+    logoText: 'TECHKNÈ',
+    logoAccent: 'GROUP',
+    primaryColor: '#6366f1',
+    footerText: 'Techknè Group - Plateforme d\'Accompagnement Technologique',
+    supportUrl: 'https://support.techkne.com',
+    baseUrl: process.env.BETTER_AUTH_URL || 'http://localhost:3000'
+};
+
+/**
+ * Injects global brand CSS variables into the layout <head>.
+ */
+function injectGlobalStyles(html: string) {
+    const styleTags = `
+    <style id="techkne-brand-styles">
+        :root { --primary: ${BRAND_CONFIG.primaryColor}; }
+        .tk-primary { color: ${BRAND_CONFIG.primaryColor} !important; }
+        .tk-bg-primary { background-color: ${BRAND_CONFIG.primaryColor} !important; }
+        .tk-btn { display: inline-block; padding: 10px 20px; background-color: ${BRAND_CONFIG.primaryColor}; color: #fff !important; text-decoration: none; border-radius: 8px; font-weight: bold; }
+    </style>
+    `;
+
+    if (html.includes('</head>')) {
+        return html.replace('</head>', `${styleTags}</head>`);
+    }
+    return `${styleTags}${html}`;
+}
+
+/**
+ * Ensures that the layout has a body placeholder.
+ * If missing, it appends it to ensure content is never lost.
+ */
+function ensureBodyPlaceholder(shell: string): string {
+    if (shell.includes('{{{body}}}') || shell.includes('{{body}}')) {
+        return shell;
+    }
+    console.warn('[EMAIL-BUILDER] Layout missing {{{body}}} placeholder. Automatic recovery initiated.');
+    // If it's a full HTML without placeholder, inject before footer or at the end
+    if (shell.includes('</body>')) {
+        return shell.replace('</body>', '{{{body}}}</body>');
+    }
+    return `${shell}\n{{{body}}}`;
+}
+
+/**
  * Default professional fallback layout.
  */
 function getDefaultLayout(subject: string, baseUrl: string, type: string, unsubLink: string) {
@@ -63,7 +112,7 @@ function getDefaultLayout(subject: string, baseUrl: string, type: string, unsubL
         .content { padding: 40px 30px; font-size: 16px; color: #444; }
         .footer { padding: 30px; text-align: center; background-color: #fcfdfe; border-top: 1px solid #f0f2f5; font-size: 12px; color: #888; }
         .footer a { color: #888; text-decoration: underline; margin: 0 10px; }
-        .btn-contact { display: inline-block; padding: 10px 20px; background-color: #000; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 20px 0; }
+        .btn-contact { display: inline-block; padding: 10px 20px; background-color: ${BRAND_CONFIG.primaryColor}; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 20px 0; }
         .unsub-btn { color: #f43f5e !important; font-weight: bold; }
         .preheader { display: none; max-height: 0px; overflow: hidden; mso-hide: all; }
         @media only screen and (max-width: 600px) {
@@ -76,7 +125,7 @@ function getDefaultLayout(subject: string, baseUrl: string, type: string, unsubL
     <span class="preheader">${subject}</span>
     <div class="container">
         <div class="header">
-            <a href="${baseUrl}" class="logo">TECHKNÈ <span style="color: #6366f1;">GROUP</span></a>
+            <a href="${baseUrl}" class="logo">${BRAND_CONFIG.logoText} <span style="color: ${BRAND_CONFIG.primaryColor};">${BRAND_CONFIG.logoAccent}</span></a>
         </div>
         <div class="content">
             {{{body}}}
@@ -85,9 +134,9 @@ function getDefaultLayout(subject: string, baseUrl: string, type: string, unsubL
             <div style="margin-bottom: 20px;">
                 <a href="${baseUrl}/contact" class="btn-contact">Nous Contacter</a>
             </div>
-            <p>Techknè Group - Plateforme d'Accompagnement Technologique</p>
-            <p>&copy; ${new Date().getFullYear()} Techknè. Tous droits réservés.</p>
-            ${type === 'newsletter' ? `<div style="margin-top: 20px;"><a href="${unsubLink}" class="unsub-btn">Se désabonner</a></div>` : ''}
+            <p>${BRAND_CONFIG.footerText}</p>
+            <p>&copy; ${new Date().getFullYear()} ${BRAND_CONFIG.name}. Tous droits réservés.</p>
+            ${(type === 'newsletter' || type === 'campaign') ? `<div style="margin-top: 20px;"><a href="${unsubLink}" class="unsub-btn">Se désabonner</a></div>` : ''}
         </div>
     </div>
 </body>
@@ -111,15 +160,16 @@ export async function wrapEmailContent(content: string, options: {
     type?: string,
     layoutId?: string,
     userName?: string,
+    alias?: string,      // The display name of the sender context
     logId?: string,      // Track individual email opens
     campaignId?: string  // Track campaign-wide opens
 }) {
-    const { recipient, subject, type = 'system', layoutId, userName = 'Utilisateur', logId, campaignId } = options;
+    const { recipient, subject, type = 'system', layoutId, userName = 'Utilisateur', alias = 'Techknè', logId, campaignId } = options;
     
     // 1. Prepare Variables
     const dateStr = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const unsubToken = generateUnsubscribeToken(recipient);
-    const baseUrl = process.env.BETTER_AUTH_URL || 'http://localhost:3000';
+    const baseUrl = BRAND_CONFIG.baseUrl;
     const unsubLink = `${baseUrl}/api/newsletter/unsubscribe?email=${encodeURIComponent(recipient)}&token=${unsubToken}`;
 
     // 2. Fetch Layout
@@ -137,12 +187,18 @@ export async function wrapEmailContent(content: string, options: {
         shell = getDefaultLayout(subject, baseUrl, type, unsubLink);
     }
 
-    // 3. Process Content
+    // Structural enforcement
+    shell = ensureBodyPlaceholder(shell);
+    shell = injectGlobalStyles(shell);
+
+    // 3. Process Content (Inner body)
     let processedContent = content
         .replace(/\{user\}/g, userName)
         .replace(/\{\{ name \}\}/g, userName)
         .replace(/\{date\}/g, dateStr)
-        .replace(/\{company_name\}/g, 'Techknè Group')
+        .replace(/\{alias\}/g, alias)
+        .replace(/\{company_name\}/g, BRAND_CONFIG.name)
+        .replace(/\{primary_color\}/g, BRAND_CONFIG.primaryColor)
         .replace(/\{unsubscribe_link\}/g, unsubLink);
 
     let cleanBody = sanitizeEmailHtml(processedContent);
@@ -153,13 +209,15 @@ export async function wrapEmailContent(content: string, options: {
         cleanBody += `\n<img src="${trackingUrl}" width="1" height="1" style="display:none !important; visibility:hidden !important; opacity:0 !important;" alt="" />`;
     }
 
-    // 5. Inject into Layout
-    // Replace placeholder logic (handles both triple and double mustache for flexibility)
+    // 5. Inject into Layout (Shell)
     return shell
         .replace(/\{\{\{body\}\}\}/g, cleanBody)
         .replace(/\{\{body\}\}/g, cleanBody)
         .replace(/\{user\}/g, userName)
         .replace(/\{date\}/g, dateStr)
+        .replace(/\{alias\}/g, alias)
+        .replace(/\{primary_color\}/g, BRAND_CONFIG.primaryColor)
+        .replace(/\{company_name\}/g, BRAND_CONFIG.name)
         .replace(/\{unsubscribe_link\}/g, unsubLink)
-        .replace(/\{company_name\}/g, 'Techknè Group');
+        .replace(/\{support_url\}/g, BRAND_CONFIG.supportUrl);
 }

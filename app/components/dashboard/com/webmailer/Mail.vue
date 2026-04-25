@@ -186,53 +186,62 @@ function formatDate(dateStr: string) {
       </p>
     </div>
 
-    <div class="flex-1 p-4 sm:p-6 overflow-y-auto">
-      <div class="whitespace-pre-wrap text-sm leading-relaxed mb-8">
-        {{ mail.body }}
+    <div class="flex-1 p-4 sm:p-6 overflow-y-auto relative flex flex-col">
+      <div class="flex-1">
+        <DashboardComWebmailerHtmlRenderer
+          :body="mail.body"
+          :is-html="mail.isHtml ?? false"
+          :max-height="1400"
+          class="mb-8"
+        />
       </div>
 
-      <!-- Attachments Section -->
-      <div v-if="mail.attachments?.length" class="mt-8 pt-6 border-t border-default">
-        <h3 class="text-xs font-bold uppercase text-dimmed tracking-wider mb-3 flex items-center gap-2">
-          <UIcon name="i-lucide:paperclip" class="size-3.5" />
-          Pièces jointes ({{ mail.attachments.length }})
-        </h3>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <div
-            v-for="att in mail.attachments"
-            :key="att.id"
-            class="flex items-center gap-3 p-3 rounded-xl border border-default bg-neutral-50 dark:bg-neutral-800/50 hover:bg-white dark:hover:bg-neutral-800 transition-all group/att"
-          >
-            <div class="size-10 rounded-lg bg-white dark:bg-neutral-900 border border-default flex items-center justify-center shrink-0 shadow-sm">
-              <UIcon :name="att.mimeType?.includes('image') ? 'i-lucide:image' : 'i-lucide:file-text'" class="size-5 text-primary" />
+      <!-- STICKY ATTACHMENT BAR (Text-on-card style) -->
+      <div v-if="mail.attachments?.length" class="sticky bottom-0 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-md border-t border-default flex flex-wrap items-center justify-between gap-4">
+         <div class="flex items-center gap-3 overflow-x-auto no-scrollbar">
+            <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-primary/5 border border-primary/10">
+               <UIcon name="i-lucide:paperclip" class="size-3.5 text-primary" />
+               <span class="text-[10px] font-black uppercase tracking-widest text-primary">{{ mail.attachments.length }} pièce(s) jointe(s)</span>
             </div>
-            <div class="min-w-0 flex-1">
-              <p class="text-xs font-bold truncate tracking-tight">{{ att.filename }}</p>
-              <p class="text-[10px] text-dimmed">{{ (att.size / 1024).toFixed(1) }} KB</p>
+
+            <div class="flex items-center gap-2">
+               <a 
+                 v-for="att in mail.attachments" 
+                 :key="att.id" 
+                 :href="att.url" 
+                 target="_blank"
+                 class="flex items-center gap-2 px-2.5 py-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors group/att border border-transparent hover:border-default"
+               >
+                  <UIcon :name="att.mimeType?.includes('image') ? 'i-lucide:image' : 'i-lucide:file-text'" class="size-3 text-dimmed group-hover/att:text-primary" />
+                  <span class="text-[11px] font-bold truncate max-w-[120px]">{{ att.filename }}</span>
+                  <span class="text-[9px] text-dimmed">({{ (att.size / 1024).toFixed(0) }} KB)</span>
+                  <UIcon name="i-lucide:download" class="size-3 text-dimmed opacity-0 group-hover/att:opacity-100" />
+               </a>
             </div>
-            <UButton
-              icon="i-lucide:download"
-              variant="ghost"
-              color="neutral"
-              size="sm"
-              class="shrink-0 opacity-0 group-hover/att:opacity-100 transition-opacity"
-              :to="att.url"
-              target="_blank"
-            />
-          </div>
-        </div>
+         </div>
+
+         <UButton 
+           v-if="mail.attachments.length > 1"
+           label="Tout télécharger (ZIP)" 
+           icon="i-lucide:archive" 
+           variant="ghost" 
+           color="neutral" 
+           size="xs" 
+           class="font-black text-[10px] uppercase tracking-tighter"
+         />
       </div>
     </div>
 
-    <!-- Reply section removed as requested - using modal instead -->
-    <div class="p-6 pt-0 shrink-0 flex justify-center">
+    <!-- Reply section actions -->
+    <div class="p-4 shrink-0 flex justify-center bg-white dark:bg-neutral-900 border-t border-default">
        <UButton 
          v-if="mail.category !== 'draft'"
          label="Répondre à ce message" 
          icon="i-lucide:reply" 
          color="primary" 
          variant="subtle" 
-         class="rounded-full px-8 shadow-sm" 
+         size="sm"
+         class="rounded-full px-8 shadow-sm font-bold" 
          @click="emits('reply', false)" 
        />
        <UButton 
@@ -241,7 +250,8 @@ function formatDate(dateStr: string) {
          icon="i-lucide:edit-3" 
          color="primary" 
          variant="solid" 
-         class="rounded-full px-8 shadow-sm" 
+         size="sm"
+         class="rounded-full px-8 shadow-sm font-bold" 
          @click="emits('edit')" 
        />
     </div>

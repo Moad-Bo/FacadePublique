@@ -12,6 +12,7 @@ const formData = computed({
 })
 
 const previewZoom = ref(85)
+const analyzerRef = ref<any>(null)
 const { saveDraft, isComposerLoading } = useComposer()
 
 // Summary logic
@@ -97,9 +98,33 @@ const { saveDraft, isComposerLoading } = useComposer()
         </div>
 
         <!-- ACTIONS -->
-        <div class="flex gap-4">
-           <UButton label="Sauvegarder Brouillon" icon="i-lucide:save" variant="soft" color="neutral" class="w-full rounded-2xl" @click="saveDraft" :loading="isComposerLoading" />
+        <div class="flex flex-col gap-3">
+           <UButton 
+             label="Sauvegarder Brouillon" 
+             icon="i-lucide:save" 
+             variant="soft" 
+             color="neutral" 
+             class="w-full rounded-2xl py-3 font-bold uppercase tracking-widest text-[10px]" 
+             @click="saveDraft" 
+             :loading="isComposerLoading" 
+           />
+           
+           <UButton 
+             label="Analyser la conformité" 
+             icon="i-lucide:gauge" 
+             variant="outline" 
+             color="primary" 
+             class="w-full rounded-2xl py-3 font-bold uppercase tracking-widest text-[10px] border-2" 
+             @click="() => analyzerRef?.open()"
+           />
         </div>
+
+        <DashboardComSharedForgeAnalysis 
+          ref="analyzerRef"
+          v-model="formData"
+          :shell-id="formData.layoutId"
+          :sections="formData.sections"
+        />
      </div>
 
      <!-- RIGHT: FINAL PREVIEW (Mutualized) -->

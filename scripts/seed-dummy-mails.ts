@@ -66,7 +66,7 @@ async function main() {
         filename: `document_test_${i}.txt`,
         mimeType: 'text/plain',
         size: Math.floor(Math.random() * 10000) + 500,
-        r2Key: `attachments/seed/test_file_${i}.txt`,
+        s3Key: `attachments/seed/test_file_${i}.txt`,
       });
     }
   }

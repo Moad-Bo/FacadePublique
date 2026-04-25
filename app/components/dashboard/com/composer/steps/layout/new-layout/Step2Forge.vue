@@ -140,7 +140,7 @@ const architectureTags = [
           <UIcon name="i-lucide:sparkles" class="size-5 text-primary" />
           <p class="text-xs font-medium text-primary/80 italic leading-tight">
              L'aperçu utilise le moteur de rendu <strong>Techknè Master</strong>. 
-             Les zones <code>{{ '{{tags}}' }}</code> deviennent automatiquement éditables dans La Forge du compositeur.
+             Les zones <code><span v-pre>{{tags}}</span></code> deviennent automatiquement éditables dans La Forge du compositeur.
           </p>
        </div>
     </div>

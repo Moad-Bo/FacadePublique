@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { sub } from 'date-fns'
-import type { Period, Range } from '~~/app/types/dashboard'
+import type { Period, Range } from '../../types/dashboard'
 
 definePageMeta({
   layout: 'dashboard',

@@ -1,6 +1,6 @@
 import { defineEventHandler, readBody, createError } from 'h3';
 import { db } from '../../utils/db';
-import { emailLog, newsletterCampaign, spamFilter, audience } from '../../../drizzle/src/db/schema';
+import { emailLog, campaign, spamFilter, audience } from '../../../drizzle/src/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { verifyMailgunSignature, extractMailgunSignature } from '../../utils/mailgun-verify';
@@ -90,21 +90,21 @@ export default defineEventHandler(async (event) => {
                 // Mise à jour des métriques de campagne si applicable
                 if (log.campaignId) {
                     if (eventType === 'delivered') {
-                        await db.update(newsletterCampaign)
-                            .set({ deliveredCount: sql`${newsletterCampaign.deliveredCount} + 1` })
-                            .where(eq(newsletterCampaign.id, log.campaignId));
+                        await db.update(campaign)
+                            .set({ deliveredCount: sql`${campaign.deliveredCount} + 1` })
+                            .where(eq(campaign.id, log.campaignId));
                     } else if (eventType === 'failed' || eventType === 'bounced') {
-                        await db.update(newsletterCampaign)
-                            .set({ failedCount: sql`${newsletterCampaign.failedCount} + 1` })
-                            .where(eq(newsletterCampaign.id, log.campaignId));
+                        await db.update(campaign)
+                            .set({ failedCount: sql`${campaign.failedCount} + 1` })
+                            .where(eq(campaign.id, log.campaignId));
                     } else if (eventType === 'opened') {
-                        await db.update(newsletterCampaign)
-                            .set({ openedCount: sql`${newsletterCampaign.openedCount} + 1` })
-                            .where(eq(newsletterCampaign.id, log.campaignId));
+                        await db.update(campaign)
+                            .set({ openedCount: sql`${campaign.openedCount} + 1` })
+                            .where(eq(campaign.id, log.campaignId));
                     } else if (eventType === 'clicked') {
-                        await db.update(newsletterCampaign)
-                            .set({ clickedCount: sql`${newsletterCampaign.clickedCount} + 1` })
-                            .where(eq(newsletterCampaign.id, log.campaignId));
+                        await db.update(campaign)
+                            .set({ clickedCount: sql`${campaign.clickedCount} + 1` })
+                            .where(eq(campaign.id, log.campaignId));
                     }
                 }
             } else {

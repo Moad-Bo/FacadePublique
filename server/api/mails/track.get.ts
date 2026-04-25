@@ -1,12 +1,12 @@
 import { defineEventHandler, getQuery, setHeader } from 'h3';
 import { db } from '../../utils/db';
-import { emailLog, newsletterCampaign } from '../../../drizzle/src/db/schema';
+import { emailLog, campaign } from '../../../drizzle/src/db/schema';
 import { eq, sql } from 'drizzle-orm';
 
 export default defineEventHandler(async (event) => {
     const query = getQuery(event);
     const id = query.id as string;   // emailLog.id
-    const cid = query.cid as string; // newsletterCampaign.id (optional)
+    const cid = query.cid as string; // campaign.id (optional)
 
     if (id) {
         try {
@@ -20,11 +20,11 @@ export default defineEventHandler(async (event) => {
 
             // 2. Update campaign metrics if applicable
             if (cid) {
-                await db.update(newsletterCampaign)
+                await db.update(campaign)
                     .set({ 
-                        openedCount: sql`${newsletterCampaign.openedCount} + 1` 
+                        openedCount: sql`${campaign.openedCount} + 1` 
                     })
-                    .where(eq(newsletterCampaign.id, cid));
+                    .where(eq(campaign.id, cid));
             }
         } catch (e) {
             console.error('[Tracking] Failed to log open:', e);

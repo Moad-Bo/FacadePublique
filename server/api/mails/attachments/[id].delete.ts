@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
 
     try {
         // Delete from R2 first
-        await deleteFromS3(attachment.r2Key)
+        await deleteFromS3(attachment.s3Key)
     } catch (e: any) {
         console.warn('R2 delete warning (may not exist):', e.message)
     }

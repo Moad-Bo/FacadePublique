@@ -36,6 +36,20 @@
       "when": 1776808831272,
       "tag": "0004_lazy_pretty_boy",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1776917235428,
+      "tag": "0005_petite_red_hulk",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1776989390570,
+      "tag": "0006_burly_tag",
+      "breakpoints": true
     }
   ]
 }

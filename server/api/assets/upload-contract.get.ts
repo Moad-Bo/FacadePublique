@@ -1,8 +1,9 @@
 import { randomUUID } from "crypto";
+import { getS3PublicUrl, createDirectUploadContrat } from "../../utils/r2";
+import { requireUserSession } from "../../utils/auth";
 
 export default defineEventHandler(async (event) => {
-    // Vérifier l'authentification (admin ou staff requis pour certains types)
-    const session = await authClient.getSession({ fetchOptions: { headers: event.node.req.headers } });
+    const session = await requireUserSession(event);
     if (!session) {
         throw createError({ statusCode: 401, statusMessage: "Unauthorized" });
     }
@@ -10,7 +11,7 @@ export default defineEventHandler(async (event) => {
     const query = getQuery(event);
     const filename = query.filename as string;
     const contentType = query.contentType as string;
-    const type = (query.type as string) || 'ugc'; // ugc, avatar, ticket, etc.
+    const type = (query.type as string) || 'ugc';
 
     if (!filename || !contentType) {
         throw createError({ statusCode: 400, statusMessage: "filename and contentType are required" });
@@ -26,7 +27,7 @@ export default defineEventHandler(async (event) => {
             success: true,
             post,
             key,
-            publicUrl: getR2PublicUrl(key)
+            publicUrl: getS3PublicUrl(key)
         };
     } catch (error: any) {
         throw createError({

@@ -63,7 +63,7 @@ const { isComposerLoading, saveCampaign } = useComposer()
       <!-- GUIDANCE & TOOLS -->
       <div class="flex justify-between items-center bg-white/50 dark:bg-neutral-900/50 p-4 rounded-3xl border border-default/40">
          <p class="text-[9px] text-dimmed font-medium uppercase tracking-tighter italic opacity-50 max-w-[400px]">
-           Les variables Techknè (ex: {{ '{{user_name}}' }}) sont injectées dynamiquement lors de l'envoi massif de la campagne.
+           Les variables Techknè (ex: <span v-pre>{{user_name}}</span>) sont injectées dynamiquement lors de l'envoi massif de la campagne.
          </p>
          
          <div class="flex items-center gap-4">

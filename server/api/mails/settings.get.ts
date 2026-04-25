@@ -1,11 +1,11 @@
 import { defineEventHandler, createError } from 'h3'
 import { db } from '../../utils/db'
-import { settings, emailLog } from '../../../drizzle/src/db/schema'
-import { sql, gt } from 'drizzle-orm'
+import { settings, mailboxFolder } from '../../../drizzle/src/db/schema'
+import { eq } from 'drizzle-orm'
 import { requireUserSession } from '../../utils/auth'
 
 export default defineEventHandler(async (event) => {
-    await requireUserSession(event, { permission: 'manage_mail' })
+    const session = await requireUserSession(event, { permission: 'manage_mail' })
     try {
         const allSettings = await db.select().from(settings).catch(() => [])
         const settingsMap: Record<string, string> = {}
@@ -15,27 +15,24 @@ export default defineEventHandler(async (event) => {
 
         const limit = parseInt(settingsMap.comm_quota_limit || '3000')
         const periodDays = parseInt(settingsMap.comm_quota_period || '30')
+        const currentUsage = parseInt(settingsMap.comm_quota_used || '0')
 
-        // Calculate usage
-        let currentUsage = 0
-        try {
-            const dateLimit = new Date()
-            dateLimit.setDate(dateLimit.getDate() - periodDays)
+        // Fetch user custom folders
+        const folders = await db.select().from(mailboxFolder).where(eq(mailboxFolder.userId, session.user.id))
 
-            const usageResult = await db.select({ 
-                count: sql<number>`count(*)` 
-            })
-            .from(emailLog)
-            .where(gt(emailLog.sentAt, dateLimit))
-
-            currentUsage = Number(usageResult[0]?.count || 0)
-        } catch (logErr) {
-            console.error('Error fetching email usage logs:', logErr)
-            // Fallback to 0 if table doesn't exist yet
-        }
+        // System folders (matches webmailer sidebar)
+        const systemFolders = [
+            { id: 'inbox', label: 'Boîte de réception', icon: 'i-lucide:inbox' },
+            { id: 'sent', label: 'Envoyés', icon: 'i-lucide:send' },
+            { id: 'archive', label: 'Archives', icon: 'i-lucide:archive' },
+            { id: 'spam', label: 'Spam', icon: 'i-lucide:shield-alert' },
+            { id: 'trash', label: 'Corbeille', icon: 'i-lucide:trash-2' }
+        ]
 
         return {
             success: true,
+            folders,
+            systemFolders,
             settings: {
                 limit,
                 period: periodDays,
@@ -48,3 +45,4 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 500, message: 'Erreur interne du serveur lors de la récupération des paramètres.' })
     }
 })
+

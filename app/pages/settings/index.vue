@@ -16,7 +16,7 @@ const activeTab = computed(() => (route.query.tab as string) || 'identity');
     <LazySettingsIdentitySettings v-if="activeTab === 'identity'" />
     <LazySettingsAppearanceSettings v-else-if="activeTab === 'appearance'" />
     <LazySettingsCommunitySettings v-else-if="activeTab === 'community'" />
-    <LazySettingsNotificationSettings v-else-if="activeTab === 'notifications'" />
+    <LazySettingsCommunicationPreferences v-else-if="activeTab === 'notifications'" />
     <LazySettingsSecuritySettings v-else-if="activeTab === 'security'" />
   </div>
 

@@ -18,12 +18,12 @@
           <input v-model="form.password" type="password" placeholder="••••••••" required />
         </div>
         
-        <!-- Forum Terms & Newsletter -->
+        <!-- Community Terms & Newsletter -->
         <div class="form-group-checkbox mt-4">
           <label class="flex items-start gap-3 cursor-pointer group">
             <input v-model="form.acceptTerms" type="checkbox" class="mt-1" required />
             <span class="text-xs text-neutral-400 group-hover:text-neutral-300 transition-colors">
-              J'accepte les <NuxtLink to="/forum/rules" target="_blank" class="text-primary-400 underline decoration-primary-400/30 underline-offset-4 hover:decoration-primary-400">CGU de la communauté</NuxtLink> et je deviens membre du forum.
+              J'accepte les <NuxtLink to="/community/rules" target="_blank" class="text-primary-400 underline decoration-primary-400/30 underline-offset-4 hover:decoration-primary-400">CGU de la communauté</NuxtLink> et je deviens membre de la communauté.
             </span>
           </label>
         </div>

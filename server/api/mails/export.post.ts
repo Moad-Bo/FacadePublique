@@ -1,7 +1,7 @@
 import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3'
 import { db } from '../../utils/db'
-import { mailbox } from '../../../drizzle/src/db/schema'
-import { inArray, and, or, eq } from 'drizzle-orm'
+import { mailbox, emailLog, emailQueue } from '../../../drizzle/src/db/schema'
+import { inArray, and, or, eq, gt } from 'drizzle-orm'
 import { requireUserSession } from '../../utils/auth'
 import JSZip from 'jszip'
 
@@ -9,80 +9,122 @@ export default defineEventHandler(async (event) => {
     const session = await requireUserSession(event, { permission: 'manage_mail' })
     
     const body = await readBody(event)
-    const { ids, folderIds } = body
-
-    if ((!ids || ids.length === 0) && (!folderIds || folderIds.length === 0)) {
-        throw createError({ statusCode: 400, message: 'Selection or Folders are required' })
-    }
+    const { ids, contexts, exportType = 'journal', format = 'csv' } = body
 
     try {
-        let mails: any[] = []
+        let exportRows: any[] = []
         
-        if (ids && ids.length > 0) {
-            mails = await db.select().from(mailbox).where(and(inArray(mailbox.id, ids), eq(mailbox.userId, session.user.id)))
-        } else if (folderIds && folderIds.length > 0) {
-            // Support both system folder names and custom folder IDs
-            const systemFolderMapping: Record<string, any> = {
-                inbox: and(eq(mailbox.trashed, false), eq(mailbox.archived, false), eq(mailbox.isSpam, false)),
-                sent: and(eq(mailbox.category, 'sent'), eq(mailbox.trashed, false)),
-                draft: and(eq(mailbox.category, 'draft'), eq(mailbox.trashed, false)),
-                archive: eq(mailbox.archived, true),
-                trash: eq(mailbox.trashed, true),
-                spam: eq(mailbox.isSpam, true),
-                starred: eq(mailbox.starred, true)
+        // 1. DATA GATHERING BASED ON TYPE
+        if (exportType === 'queue') {
+            const conditions: any[] = []
+            if (contexts && contexts.length > 0) {
+                conditions.push(inArray(emailQueue.type, contexts))
+            }
+            const items = await db.select().from(emailQueue).where(conditions.length > 0 ? and(...conditions) : undefined)
+            exportRows = items.map(q => ({
+                date: q.scheduledAt,
+                direction: 'outgoing (scheduled)',
+                context: q.type,
+                from: q.fromContext || 'system',
+                to: q.recipient,
+                subject: q.subject,
+                status: q.status,
+                error: q.errorMessage
+            }))
+        } else {
+            // JOURNAL or ARCHIVE
+            const dateLimit = new Date();
+            dateLimit.setDate(dateLimit.getDate() - 90); // Export last 90 days by default if no IDs
+
+            const logConditions: any[] = [gt(emailLog.sentAt, dateLimit)]
+            const boxConditions: any[] = [gt(mailbox.date, dateLimit), eq(mailbox.category, 'inbox')]
+
+            if (contexts && contexts.length > 0) {
+                logConditions.push(inArray(emailLog.type, contexts))
+                boxConditions.push(inArray(mailbox.toAccount, contexts))
             }
 
-            const conditions: any[] = [eq(mailbox.userId, session.user.id)]
-            const folderConditions: any[] = []
-            
-            for (const fId of folderIds) {
-                if (systemFolderMapping[fId]) {
-                    folderConditions.push(systemFolderMapping[fId])
-                } else {
-                    folderConditions.push(eq(mailbox.folderId, fId))
-                }
-            }
-            
-            if (folderConditions.length > 0) {
-                conditions.push(or(...folderConditions))
-            }
+            const outgoing = await db.select().from(emailLog).where(and(...logConditions))
+            const incoming = await db.select().from(mailbox).where(and(...boxConditions))
 
-            mails = await db.select().from(mailbox).where(and(...conditions))
-        }
-        const zip = new JSZip()
-
-        for (const mail of mails) {
-            const dateStr = mail.date ? new Date(mail.date).toUTCString() : new Date().toUTCString()
-            const emlLines = [
-                `Date: ${dateStr}`,
-                `From: ${mail.fromName || 'Inconnu'} <${mail.fromEmail || ''}>`,
-                `To: ${mail.toAccount || 'contact'}@mail.techkne.fr`,
-                `Subject: ${mail.subject || '(Sans objet)'}`,
-                `MIME-Version: 1.0`,
-                `Content-Type: text/plain; charset=utf-8`,
-                `X-Export-Source: techkne-webmailer`,
-                ``,
-                mail.body || ''
+            exportRows = [
+                ...outgoing.map(l => ({
+                    date: l.sentAt,
+                    direction: 'outgoing',
+                    context: l.type,
+                    from: l.fromAlias || l.type,
+                    to: l.recipient,
+                    subject: l.subject,
+                    status: l.status,
+                    error: l.errorMessage
+                })),
+                ...incoming.map(m => ({
+                    date: m.date,
+                    direction: 'incoming',
+                    context: m.toAccount || 'inbox',
+                    from: m.fromEmail,
+                    to: m.toAccount || 'unknown',
+                    subject: m.subject,
+                    status: 'delivered',
+                    error: null
+                }))
             ]
-            
-            const emlContent = emlLines.join('\r\n')
-            
-            // Generate a safe filename
-            const cleanSubject = (mail.subject || 'sans_titre')
-                .replace(/[^a-z0-9]/gi, '_')
-                .substring(0, 50)
-            const filename = `${cleanSubject}_${mail.id.substring(0, 8)}.eml`
-            
-            zip.file(filename, emlContent)
         }
 
-        const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' })
-        
-        setResponseHeader(event, 'Content-Type', 'application/zip')
-        setResponseHeader(event, 'Content-Disposition', `attachment; filename="export_mails_${new Date().getTime()}.zip"`)
-        
-        return zipBuffer
+        // Sort by date desc
+        exportRows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+        if (format === 'csv') {
+            const now = new Date()
+            const dateStr = now.toLocaleDateString('fr-FR')
+            const timeStr = now.toISOString().split('T')[0].replace(/-/g, '')
+            
+            const selectedContexts = contexts ? contexts.join(', ') : 'Multi-Contextes'
+            const modeLabel = exportType === 'queue' ? 'PROGRAMMATION' : exportType === 'archive' ? 'ARCHIVAGE' : 'JOURNAL'
+            
+            const lines = [
+                `TYPE D'EXPORT: ${modeLabel}`,
+                `CONTEXTE(S): ${selectedContexts}`,
+                `DATE D'EXPORT: ${dateStr}`,
+                `GENERE PAR: ${session.user.email}`,
+                ``,
+                `Date,Direction,Contexte,Expéditeur,Destinataire,Objet,Statut,Erreur/Info`
+            ]
+
+            for (const r of exportRows) {
+                const row = [
+                    r.date ? new Date(r.date).toLocaleString('fr-FR') : '-',
+                    r.direction,
+                    r.context || '-',
+                    `"${(r.from || '').replace(/"/g, '""')}"`,
+                    `"${(r.to || '').replace(/"/g, '""')}"`,
+                    `"${(r.subject || '').replace(/"/g, '""')}"`,
+                    r.status,
+                    `"${(r.error || '').replace(/"/g, '""')}"`
+                ]
+                lines.push(row.join(','))
+            }
+
+            const csvContent = lines.join('\n')
+            
+            const typeSlug = exportType === 'queue' ? 'Prog' : exportType === 'archive' ? 'Arch' : 'Log'
+            const contextSlug = contexts && contexts.length > 0 
+                ? contexts.map((c: string) => c.charAt(0).toUpperCase() + c.slice(1)).join('_') 
+                : 'Multi'
+            const filename = `Exp${typeSlug}_${contextSlug}_${timeStr}.csv`
+
+            setResponseHeader(event, 'Content-Type', 'text/csv; charset=utf-8')
+            setResponseHeader(event, 'Content-Disposition', `attachment; filename="${filename}"`)
+            
+            return csvContent
+        }
+
+        // Fallback for ZIP (only works for Journal/Archive mailbox items for now)
+        // If it's a queue export, ZIP is not supported yet (EML requires body which is in queue blob)
+        throw createError({ statusCode: 400, message: 'Format non supporté pour ce type d\'export' })
+
     } catch (e: any) {
+        console.error('Export failed:', e)
         throw createError({ statusCode: 500, message: `Export failed: ${e.message}` })
     }
 })

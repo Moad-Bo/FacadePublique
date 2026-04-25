@@ -368,17 +368,40 @@ const onConfirmSpam = async (options: { blacklist: boolean }) => {
                   </div>
                 </div>
 
-                <div class="p-6 text-sm leading-relaxed whitespace-pre-wrap">
-                  {{ tmail.body }}
+                <div class="p-6">
+                  <DashboardComWebmailerHtmlRenderer
+                    :body="tmail.body"
+                    :is-html="tmail.isHtml ?? false"
+                    :max-height="600"
+                  />
                 </div>
 
-                <!-- Thread Attachments -->
-                <div v-if="tmail.attachments?.length" class="px-6 pb-6 flex flex-wrap gap-2">
-                  <div v-for="att in tmail.attachments" :key="att.id" class="flex items-center gap-2 p-1 px-3 rounded-full border border-default bg-neutral-100/50 dark:bg-neutral-800/50 text-[10px] font-bold group/att hover:bg-white dark:hover:bg-neutral-900 hover:border-primary/30 transition-all">
-                    <UIcon name="i-lucide:paperclip" class="size-3 text-primary" />
-                    <span class="truncate max-w-[120px]">{{ att.filename }}</span>
-                    <UButton icon="i-lucide:download" variant="ghost" color="neutral" size="xs" class="shrink-0" :to="att.url" target="_blank" />
+                <!-- Thread Attachments (Text-on-card style) -->
+                <div v-if="tmail.attachments?.length" class="px-6 pb-6 pt-2 flex flex-wrap items-center justify-between gap-4 border-t border-dashed border-default/50">
+                  <div class="flex flex-wrap gap-2">
+                    <a 
+                      v-for="att in tmail.attachments" 
+                      :key="att.id" 
+                      :href="att.url" 
+                      target="_blank"
+                      class="flex items-center gap-2 p-1.5 px-3 rounded-full border border-default bg-neutral-50/50 dark:bg-neutral-900/50 text-[10px] font-bold group/att hover:bg-white dark:hover:bg-neutral-800 transition-all"
+                    >
+                      <UIcon :name="att.mimeType?.includes('image') ? 'i-lucide:image' : 'i-lucide:file-text'" class="size-3 text-dimmed group-hover/att:text-primary transition-colors" />
+                      <span class="truncate max-w-[120px]">{{ att.filename }}</span>
+                      <span class="text-[9px] text-dimmed">({{ (att.size / 1024).toFixed(0) }} KB)</span>
+                      <UIcon name="i-lucide:download" class="size-3 text-dimmed opacity-0 group-hover/att:opacity-100 transition-opacity" />
+                    </a>
                   </div>
+
+                  <UButton 
+                    v-if="tmail.attachments.length > 1"
+                    label="Tout (ZIP)" 
+                    icon="i-lucide:archive" 
+                    variant="ghost" 
+                    color="neutral" 
+                    size="xs" 
+                    class="font-black text-[9px] uppercase tracking-widest"
+                  />
                 </div>
               </div>
 

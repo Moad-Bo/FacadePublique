@@ -2,6 +2,7 @@ import { drizzle } from 'drizzle-orm/mysql2';
 import { createConnection } from 'mysql2/promise';
 import * as schema from './schema';
 import fs from 'fs';
+import path from 'path';
 
 let db: ReturnType<typeof drizzle> | null = null;
 
@@ -11,8 +12,9 @@ export const useDrizzle = async () => {
         try {
             const caPath = process.env.MYSQL_SSL_CA;
             if (caPath) {
-                caCert = fs.readFileSync(caPath, 'utf8');
-                console.log("Certificat CA lu avec succès.");
+                const fullPath = path.isAbsolute(caPath) ? caPath : path.resolve(process.cwd(), caPath);
+                caCert = fs.readFileSync(fullPath, 'utf8');
+                console.log("Certificat CA lu avec succès depuis :", fullPath);
             } else {
                 console.warn("MYSQL_SSL_CA n'est pas défini. La connexion SSL pourrait échouer.");
             }

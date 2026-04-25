@@ -45,7 +45,7 @@ const links = computed<NavigationMenuItem[][]>(() => {
   ]
 
   const communication: NavigationMenuItem[] = []
-  if (hasPermission(['manage_mail', 'manage_newsletter'])) {
+  if (hasPermission(['manage_mail', 'manage_campaign'])) {
     communication.push({
       label: 'KPI',
       icon: 'i-lucide-activity',
@@ -60,18 +60,25 @@ const links = computed<NavigationMenuItem[][]>(() => {
       badge: '4'
     })
   }
-  if (hasPermission('manage_newsletter')) {
+  if (hasPermission('manage_campaign')) {
     communication.push({
-       label: 'Newsletter',
-       icon: 'i-lucide-megaphone',
-       to: localePath('/dashboard/com/newsletter')
+       label: 'Campagnes',
+       icon: 'i-lucide-send',
+       to: localePath('/dashboard/com/campagne')
     })
   }
-  if (hasPermission(['manage_mail', 'manage_newsletter'])) {
+  if (hasPermission(['manage_mail', 'manage_campaign'])) {
     communication.push({
-       label: 'Communication',
+       label: 'Mail Metric',
+       icon: 'i-lucide-scroll-text',
+       to: localePath('/dashboard/com/log')
+    })
+  }
+  if (hasPermission(['manage_mail', 'manage_campaign'])) {
+    communication.push({
+       label: 'Branding Configuration',
        icon: 'i-lucide-layout-template',
-       to: localePath('/dashboard/com/layout')
+       to: localePath('/dashboard/com/branding-configuration')
     })
   }
 
@@ -81,6 +88,13 @@ const links = computed<NavigationMenuItem[][]>(() => {
       label: t('nav.user_management') || 'Utilisateurs',
       icon: 'i-lucide-shield-check',
       to: localePath('/dashboard/users')
+    })
+  }
+  if (hasPermission('support:chat')) {
+    administration.push({
+      label: 'Modération',
+      icon: 'i-lucide-shield-alert',
+      to: localePath('/dashboard/moderation')
     })
   }
 
@@ -159,29 +173,28 @@ const dashboardTheme = {
       :ui="{ footer: 'lg:border-t lg:border-default pt-2' }"
     >
       <template #header="{ collapsed }">
-        <NuxtLink :to="localePath('/dashboard')" class="flex items-center gap-2 px-3 py-2 shrink-0">
-          <UIcon name="i-lucide:rocket" class="size-6 text-primary" />
-          <span v-if="!collapsed" class="font-black text-xl tracking-tighter select-none italic uppercase">Techknè</span>
-        </NuxtLink>
-        <DashboardTeamsMenu :collapsed="collapsed" />
-      </template>
-
-      <!-- Sidebar Toggle Handle (Desktop only) -->
-      <template #default="{ collapsed }">
-        <div 
-          class="hidden lg:flex absolute -right-3 top-1/2 -translate-y-1/2 z-50 items-center justify-center pointer-events-auto"
-        >
+        <div class="flex items-center justify-between w-full pr-2">
+          <NuxtLink :to="localePath('/dashboard')" class="flex items-center gap-2 px-3 py-2 shrink-0">
+            <UIcon name="i-lucide:rocket" class="size-6 text-primary" />
+            <span v-if="!collapsed" class="font-black text-xl tracking-tighter select-none italic uppercase">Techknè</span>
+          </NuxtLink>
+          
           <UButton
-            :icon="collapsed ? 'i-lucide-chevron-right' : 'i-lucide-chevron-left'"
+            :icon="collapsed ? 'i-lucide:panel-left-open' : 'i-lucide:panel-left-close'"
             size="xs"
+            variant="ghost"
             color="neutral"
-            variant="solid"
-            class="rounded-full shadow-lg border border-default bg-background hover:bg-muted"
+            class="hover:bg-primary/5 transition-all text-dimmed hover:text-primary"
             @click="isSidebarCollapsed = !isSidebarCollapsed"
           />
         </div>
+        <DashboardTeamsMenu :collapsed="collapsed" />
+      </template>
 
+      <!-- Sidebar Content -->
+      <template #default="{ collapsed }">
         <UDashboardSearchButton :collapsed="collapsed" class="bg-transparent ring-default mb-4" />
+
         
           <!-- MAIN NAVIGATION -->
           <div class="space-y-6">
@@ -206,7 +219,7 @@ const dashboardTheme = {
               />
             </div>
 
-            <div v-if="hasPermission(['manage_roles', 'manage_users'])">
+            <div v-if="hasPermission(['manage_roles', 'manage_users', 'support:chat'])">
               <div v-if="!collapsed" class="px-3 mb-2 text-[10px] font-bold text-dimmed uppercase tracking-widest">Administration</div>
               <UNavigationMenu
                 :collapsed="collapsed"
@@ -268,16 +281,7 @@ const dashboardTheme = {
         </template>
 
         <template #right>
-          <UButton
-            color="neutral"
-            variant="ghost"
-            square
-            @click="isNotificationsSlideoverOpen = true"
-          >
-            <UChip color="error" inset>
-              <UIcon name="i-lucide:bell" class="size-5" />
-            </UChip>
-          </UButton>
+          <DashboardNotificationBell />
         </template>
       </UDashboardNavbar>
 

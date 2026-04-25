@@ -5,7 +5,7 @@ import { useRuntimeConfig } from "#imports";
 
 export enum EmailContext {
   SYSTEM = "system",
-  FORUM_TX = "forum_tx",
+  COMMUNITY_TX = "forum_tx",
   BLOG_TX = "blog_tx",
   MARKETING_BATCH = "marketing_batch",
   BLOG_BATCH = "blog_batch",
@@ -37,7 +37,7 @@ export const emailRouter = {
       case EmailContext.SYSTEM:
         return { allowed: true, domain: config.mailDomainSystem, method: "api" };
 
-      case EmailContext.FORUM_TX:
+      case EmailContext.COMMUNITY_TX:
       case EmailContext.BLOG_TX:
         const audienceForum = await this._getAudience(email);
         if (audienceForum && !audienceForum.optInForum) {

@@ -60,18 +60,26 @@ export default defineNuxtConfig({
     compatibilityVersion: 4
   },
 
+  // Configuration des composants : supporte le nouveau dossier /common sans préfixe
+  // tout en préservant le pathPrefix pour le dashboard et le forum.
+  components: [
+    { path: 'components/common', pathPrefix: false },
+    { path: 'components/community', pathPrefix: false },
+    'components', // Par défaut pathPrefix: true
+  ],
+
   modules: [
     './modules/assistant',
     "@nuxt/ui",
     "@nuxt/fonts",
     "@nuxt/icon",
-
     "@nuxtjs/color-mode",
     "@nuxt/content",
     "@nuxtjs/i18n",
     "@nuxtjs/seo",
-    "@vueuse/nuxt",
     // 'nuxt-studio'
+    "@vueuse/nuxt",
+    'vue3-carousel-nuxt'
   ],
 
   alias: {
@@ -106,9 +114,7 @@ export default defineNuxtConfig({
 
   vite: {
     server: {
-      // Autorise ton tunnel Ngrok actuel. 
-      // Note : si ton URL change demain, tu devras mettre à jour cette ligne ou remplacer le tableau par 'true'
-      allowedHosts: ['gregory-headed-intentionally.ngrok-free.dev']
+      allowedHosts: true
     },
     optimizeDeps: {
       include: [
@@ -123,12 +129,35 @@ export default defineNuxtConfig({
         'date-fns',
         '@vueuse/core',
         'zod',
-        '@nuxt/ui > prosemirror-state',
-        '@nuxt/ui > prosemirror-transform',
-        '@nuxt/ui > prosemirror-model',
-        '@nuxt/ui > prosemirror-view',
-        '@nuxt/ui > prosemirror-gapcursor'
+        '@tiptap/vue-3',
+        '@tiptap/starter-kit',
+        '@tiptap/extension-text-style',
+        '@tiptap/extension-color',
+        '@tiptap/extension-font-family',
+        '@tiptap/extension-text-align',
+        '@tiptap/extension-strike',
+        '@tiptap/extension-link',
+        '@tiptap/extension-blockquote',
+        '@tiptap/extension-horizontal-rule',
+        '@tiptap/extension-mention',
+        'prosemirror-state',
+        'prosemirror-transform',
+        'prosemirror-model',
+        'prosemirror-view',
+        'prosemirror-gapcursor'
       ]
+    }
+  },
+
+  nitro: {
+    routeRules: {
+      '/**': {
+        headers: {
+          // Fix Error with Permissions-Policy header: Unrecognized feature
+          // We set a minimum baseline to override any browser-injected trial features
+          'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
+        }
+      }
     }
   },
 

@@ -16,9 +16,8 @@ export default defineEventHandler(async (event) => {
   ]
 
   // 2. Fetch pages Markdown via Nuxt Content v3 (depuis SQLite en mémoire)
-  // Utilisation de queryCollection pour récupérer les infos de base
-  const docsFr = await queryCollection(event, 'docs_fr').select('title', 'path', 'description').all()
-  const docsEn = await queryCollection(event, 'docs_en').select('title', 'path', 'description').all()
+  const docsFr = await queryCollection('docs_fr' as any).select('title', 'path', 'description').all()
+  const docsEn = await queryCollection('docs_en' as any).select('title', 'path', 'description').all()
 
   const contentPages = [
     ...(Array.isArray(docsFr) ? docsFr.map(p => ({ ...p, category: 'Docs (FR)' })) : []),

@@ -9,7 +9,7 @@ import { z } from 'zod'
 const updateMemberSchema = z.object({
     id: z.string().min(1),
     action: z.enum(['update', 'delete']),
-    isGuest: z.boolean(), // true = audience (newsletterSubscriber), false = user table
+    isGuest: z.boolean(), // true = audience table, false = user table
     data: z.object({
         name: z.string().optional(),
         email: z.string().email().optional(),

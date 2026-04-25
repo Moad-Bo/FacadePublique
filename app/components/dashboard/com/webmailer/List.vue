@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { format, isToday } from 'date-fns'
-import type { Mail } from '~~/app/types/dashboard'
+import type { Mail } from '../../../../types/dashboard'
 
 const props = defineProps<{
   mails: any[]
@@ -59,6 +59,16 @@ const toggleSelection = (id: string) => {
     } else {
         selectedIds.value.push(id)
     }
+}
+
+/** Retire toutes les balises HTML pour afficher un texte propre dans le snippet */
+const stripHtml = (html: string): string => {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 </script>
 
@@ -124,7 +134,7 @@ const toggleSelection = (id: string) => {
                 </div>
 
                 <p class="text-dimmed line-clamp-1 text-[11px] mt-0.5">
-                  {{ mail.body }}
+                  {{ mail.isHtml ? stripHtml(mail.body) : mail.body }}
                 </p>
             </div>
         </div>

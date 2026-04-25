@@ -1,5 +1,5 @@
 import { db } from '../utils/db';
-import { audience } from '../../drizzle/src/db/schema';
+import { audience, user as userTable } from '../../drizzle/src/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -7,7 +7,14 @@ export const audienceService = {
   /**
    * Upsert d'un visiteur ou prospect (depuis le blog ou formulaire de contact)
    */
-  async upsertFromGuest(email: string, source: string, optIns: { newsletter?: boolean; marketing?: boolean; forum?: boolean } = {}) {
+  async upsertFromGuest(email: string, source: string, optIns: { 
+    newsletter?: boolean; 
+    marketing?: boolean; 
+    forum?: boolean;
+    changelog?: boolean;
+    mentions?: boolean;
+    replies?: boolean;
+  } = {}) {
     try {
       const existing = await db.query.audience.findFirst({
         where: eq(audience.email, email.toLowerCase())
@@ -19,6 +26,9 @@ export const audienceService = {
             optInNewsletter: optIns.newsletter ?? existing.optInNewsletter,
             optInMarketing: optIns.marketing ?? existing.optInMarketing,
             optInForum: optIns.forum ?? existing.optInForum,
+            optInChangelog: optIns.changelog ?? existing.optInChangelog,
+            optInMentions: optIns.mentions ?? existing.optInMentions,
+            optInReplies: optIns.replies ?? existing.optInReplies,
             source: source || existing.source,
             updatedAt: new Date()
           })
@@ -34,6 +44,9 @@ export const audienceService = {
         optInNewsletter: optIns.newsletter ?? false,
         optInMarketing: optIns.marketing ?? false,
         optInForum: optIns.forum ?? true,
+        optInChangelog: optIns.changelog ?? true,
+        optInMentions: optIns.mentions ?? true,
+        optInReplies: optIns.replies ?? true,
       });
       return id;
     } catch (error) {
@@ -75,6 +88,47 @@ export const audienceService = {
       return id;
     } catch (error) {
       console.error('[AUDIENCE_SERVICE] Error in syncFromAuth:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Mise à jour des préférences pour un utilisateur authentifié
+   */
+  async updateForUser(userId: string, optIns: { 
+    newsletter?: boolean; 
+    marketing?: boolean; 
+    forum?: boolean;
+    changelog?: boolean;
+    mentions?: boolean;
+    replies?: boolean;
+  }) {
+    try {
+      const existing = await db.query.audience.findFirst({
+        where: eq(audience.userId, userId)
+      });
+
+      if (!existing) {
+        // Find by email first to avoid duplicates if they were a guest before
+        const user = await db.query.user.findFirst({ where: eq(userTable.id, userId) });
+        if (!user) throw new Error('User not found');
+        
+        return await this.upsertFromGuest(user.email, 'settings', optIns);
+      }
+
+      await db.update(audience)
+        .set({
+          optInNewsletter: optIns.newsletter ?? existing.optInNewsletter,
+          optInMarketing: optIns.marketing ?? existing.optInMarketing,
+          optInForum: optIns.forum ?? existing.optInForum,
+          optInChangelog: optIns.changelog ?? existing.optInChangelog,
+          optInMentions: optIns.mentions ?? existing.optInMentions,
+          optInReplies: optIns.replies ?? existing.optInReplies,
+          updatedAt: new Date()
+        })
+        .where(eq(audience.userId, userId));
+    } catch (error) {
+      console.error('[AUDIENCE_SERVICE] Error in updateForUser:', error);
       throw error;
     }
   }

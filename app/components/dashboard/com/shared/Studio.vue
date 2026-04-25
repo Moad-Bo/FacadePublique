@@ -108,15 +108,16 @@ const getNextLabel = computed(() => {
       <!-- Right: Global Actions -->
       <div class="flex items-center gap-2">
         <UButton 
+          type="button"
           variant="ghost" 
           color="neutral" 
           size="sm" 
           :icon="isFullscreen ? 'i-lucide:minimize-2' : 'i-lucide:maximize-2'" 
-          @click="emit('toggle-fullscreen')" 
+          @click.stop="emit('toggle-fullscreen')" 
           class="hidden sm:inline-flex"
         />
-        <UButton variant="ghost" color="neutral" size="sm" icon="i-lucide:x" @click="closeComposer" />
-      </div>
+        <UButton type="button" variant="ghost" color="neutral" size="sm" icon="i-lucide:x" @click.stop="closeComposer" />
+</div>
     </div>
 
     <!-- 2. MAIN WORKSPACE (Dynamic Step Content) -->
@@ -150,14 +151,20 @@ const getNextLabel = computed(() => {
             <component 
               :is="currentStep.component" 
               v-if="currentStep"
+              :key="currentStep.id"
               v-model="composerForm" 
               :layouts="layouts"
             />
           </template>
           <template #fallback>
-            <div class="flex-1 flex flex-col items-center justify-center gap-4 text-dimmed italic">
-               <UIcon name="i-lucide:loader-2" class="size-10 animate-spin opacity-20" />
-               <p class="text-xs uppercase tracking-widest font-bold opacity-40">Chargement du Module...</p>
+            <div class="flex-1 h-full flex flex-col items-center justify-center gap-6 p-12 text-center animate-pulse">
+               <div class="size-20 rounded-3xl bg-primary/5 flex items-center justify-center border border-primary/10">
+                  <UIcon name="i-lucide:sparkles" class="size-10 text-primary opacity-20" />
+               </div>
+               <div class="space-y-2">
+                  <p class="text-xs uppercase tracking-[0.3em] font-black text-primary opacity-60">Initialisation</p>
+                  <p class="text-sm font-bold italic opacity-40">Chargement de votre espace de travail...</p>
+               </div>
             </div>
           </template>
         </Suspense>
@@ -170,15 +177,16 @@ const getNextLabel = computed(() => {
         <div class="flex items-center gap-8">
            <div class="flex items-center gap-2">
               <UButton 
+                type="button"
                 :disabled="composerStep === 1" 
                 icon="i-lucide:chevron-left" 
                 variant="ghost" 
                 color="neutral" 
-                class="rounded-full size-12 flex items-center justify-center transition-all" 
+                class="rounded-full size-12 flex items-center justify-center" 
                 :class="{ 'opacity-10 scale-90': composerStep === 1 }"
-                @click="composerStep--" 
+                @click.stop="composerStep > 1 ? composerStep-- : null" 
               />
-              <span class="text-[9px] font-black text-dimmed uppercase tracking-widest px-2 group-hover:block transition-all" v-if="composerStep > 1">Retour</span>
+              <span class="text-[9px] font-black text-dimmed uppercase tracking-widest px-2" v-if="composerStep > 1">Retour</span>
            </div>
            
            <div class="h-6 w-px bg-default mx-4 opacity-30" />
@@ -186,12 +194,13 @@ const getNextLabel = computed(() => {
            <div class="flex items-center gap-2">
               <span class="text-[9px] font-black text-primary uppercase tracking-widest px-2" v-if="composerStep < totalSteps">{{ getNextLabel }}</span>
               <UButton 
+                type="button"
                 v-if="composerStep < totalSteps"
                 icon="i-lucide:chevron-right" 
                 variant="solid" 
                 color="primary" 
                 class="rounded-full size-12 flex items-center justify-center shadow-lg shadow-primary/20 hover:scale-110 active:scale-95 transition-all" 
-                @click="nextStep" 
+                @click.stop="nextStep" 
               />
               <div v-else class="size-12" />
            </div>
@@ -200,6 +209,7 @@ const getNextLabel = computed(() => {
         <!-- FINAL ACTION (Right Side) -->
         <div class="absolute right-8">
            <UButton 
+              type="button"
               v-if="composerStep === totalSteps"
               :label="getActionLabel"
               :icon="getActionLabel.includes('Envoyer') ? 'i-lucide:send' : 'i-lucide:check'"
@@ -207,7 +217,7 @@ const getNextLabel = computed(() => {
               color="primary" 
               class="rounded-2xl px-12 font-black italic uppercase tracking-tighter shadow-2xl shadow-primary/30 animate-in fade-in slide-in-from-right-8 duration-700"
               :loading="isComposerLoading"
-              @click="handleSave"
+              @click.stop="handleSave"
            />
         </div>
     </div>

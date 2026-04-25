@@ -38,11 +38,11 @@ export default defineEventHandler(async (event) => {
     // Generate a unique R2 key
     const assetId = randomUUID()
     // Prefix by type to keep R2 bucket organized
-    const r2Key = `${type}/${targetId || 'temp'}/${assetId}_${filename}`
+    const s3Key = `${type}/${targetId || 'temp'}/${assetId}_${filename}`
 
     try {
         // Upload to R2
-        const publicUrl = await uploadToS3(r2Key, filePart.data, mimeType)
+        const publicUrl = await uploadToS3(s3Key, filePart.data, mimeType)
 
         // Save metadata in DB
         await db.insert(asset).values({
@@ -53,7 +53,7 @@ export default defineEventHandler(async (event) => {
             filename,
             mimeType,
             size,
-            r2Key,
+            s3Key,
             publicUrl
         })
 

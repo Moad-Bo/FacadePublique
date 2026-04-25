@@ -1,8 +1,8 @@
 <template>
   <UAccordion :items="items" :class="class">
-    <template #item="{ item }">
+    <template #item="props">
       <div class="p-4 bg-neutral-50 dark:bg-neutral-900/50 rounded-lg">
-        <slot :name="item.slot || 'item'" :item="item" />
+        <slot :name="(props as any).item?.slot || (props as any).slot || 'item'" :item="(props as any).item || props" />
       </div>
     </template>
   </UAccordion>

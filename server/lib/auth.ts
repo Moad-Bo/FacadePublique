@@ -88,7 +88,7 @@ export const auth = betterAuth({
             create: {
                 after: async (user) => {
                     // Sync to Audience (Single Source of Truth)
-                    await audienceService.syncFromAuth(user, false);
+                    await audienceService.syncFromAuth({ ...user, email: user.email as string }, false);
 
                     await scheduleEmail({
                         recipient: user.email,

@@ -5,6 +5,7 @@ const { locale } = useI18n();
 // Fetch top-level navigation sections for the docs index
 const { data: navTree } = await useAsyncData(
   `docs-index-${locale.value}`,
+  // @ts-ignore - 'docs' might not be populated in PageCollections yet
   () => queryCollectionNavigation('docs'),
   { watch: [locale] }
 );

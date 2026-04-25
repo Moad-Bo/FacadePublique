@@ -9,9 +9,10 @@ dotenv.config();
 async function test() {
     console.log("--- STARTING DB TEST ---");
     const caPath = process.env.MYSQL_SSL_CA;
-    const fullPath = path.isAbsolute(caPath) ? caPath : path.resolve(process.cwd(), caPath);
+    const fullPath = (caPath && path.isAbsolute(caPath)) ? caPath : path.resolve(process.cwd(), caPath || '');
     
     console.log("Connecting to:", process.env.MYSQL_HOST);
+    console.log("Using CA from:", fullPath);
     
     try {
         const conn = await mysql.createConnection({

@@ -21,7 +21,7 @@ export function getCloudFrontSignedUrl(path: string, expiresMinutes: number = 15
     return getSignedUrl({
       url,
       keyPairId,
-      privateKey,
+      privateKey: privateKey as string,
       dateLessThan,
     });
   } catch (error) {

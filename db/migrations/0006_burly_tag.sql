@@ -1,0 +1,1 @@
+ALTER TABLE `mailbox` ADD `is_html` boolean DEFAULT false;

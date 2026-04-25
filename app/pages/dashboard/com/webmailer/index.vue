@@ -366,7 +366,7 @@ const exportMails = async () => {
                <UIcon name="i-lucide:refresh-cw" class="size-6 animate-spin" />
              </div>
           </template>
-          <WebmailerSidebar 
+          <DashboardComWebmailerSidebar 
             v-model:active-folder="activeFolder"
             v-model:sidebar-expanded="sidebarExpanded"
             :system-folders="systemFolders"
@@ -510,7 +510,7 @@ const exportMails = async () => {
       />
 
       <!-- SPAM CONFIRMATION CARD -->
-      <DashboardComWebmailerSpamConfirm 
+      <DashboardComWebmailerSpamConfirmationCard 
         v-if="showSpamConfirm"
         :ids="spamConfirmIds"
         :senders="spamConfirmSenders"

@@ -100,27 +100,26 @@ async function checkQuota(): Promise<{ allowed: boolean; error?: string }> {
         allSettings.forEach(s => settingsMap[s.key] = s.value);
 
         const limit = parseInt(settingsMap.comm_quota_limit || '3000');
-        const periodDays = parseInt(settingsMap.comm_quota_period || '30');
-
-        const dateLimit = new Date();
-        dateLimit.setDate(dateLimit.getDate() - periodDays);
-
-        const usageResult = await db.select({ 
-            count: sql<number>`count(*)` 
-        })
-        .from(emailLog)
-        .where(gt(emailLog.sentAt, dateLimit));
-
-        const currentUsage = Number(usageResult[0]?.count || 0);
+        const currentUsage = parseInt(settingsMap.comm_quota_used || '0');
 
         if (currentUsage >= limit) {
-            return { allowed: false, error: `Quota exceeded: ${currentUsage}/${limit} messages in the last ${periodDays} days.` };
+            return { allowed: false, error: `Quota exceeded: ${currentUsage}/${limit} messages.` };
         }
 
         return { allowed: true };
     } catch (e) {
         console.error("Quota check failed:", e);
         return { allowed: true }; // Fallback to allowed if check fails to avoid blocking system
+    }
+}
+
+async function incrementQuota() {
+    try {
+        await db.insert(settings)
+            .values({ key: 'comm_quota_used', value: '1' })
+            .onDuplicateKeyUpdate({ set: { value: sql`CAST(value AS UNSIGNED) + 1` } });
+    } catch (e) {
+        console.error("Failed to increment quota", e);
     }
 }
 
@@ -145,8 +144,8 @@ export const sendEmail = async ({
     text?: string,
     template?: string,
     campaignId?: string,
-    type?: "system" | "newsletter" | "contact" | "notification" | "mod-forum" | "staff",
-    attachments?: { filename: string, r2Key: string, contentType: string }[],
+    type?: "system" | "newsletter" | "contact" | "notification" | "mod-forum" | "staff" | "campaign" | "marketing",
+    attachments?: { filename: string, s3Key: string, contentType: string }[],
     fromContext?: string
 }) => {
     const logId = randomUUID();
@@ -159,10 +158,12 @@ export const sendEmail = async ({
     // 1. ROUTING & OPT-IN CHECK
     const contextMap: Record<string, EmailContext> = {
       system: EmailContext.SYSTEM,
-      newsletter: EmailContext.MARKETING_BATCH,
-      notification: EmailContext.FORUM_TX,
-      'mod-forum': EmailContext.FORUM_TX,
+      campaign: EmailContext.MARKETING_BATCH,
+      newsletter: EmailContext.MARKETING_BATCH, // kept for legacy
+      notification: EmailContext.COMMUNITY_TX,
+      'mod-forum': EmailContext.COMMUNITY_TX,
       staff: EmailContext.WEBMAILER,
+      marketing: EmailContext.MARKETING_BATCH,
       contact: EmailContext.BLOG_TX
     };
 
@@ -181,23 +182,36 @@ export const sendEmail = async ({
     }
     
     try {
-        console.log(`[Email] Preparing content for ${recipient}...`);
-        const { wrapEmailContent } = await import("./email-builder");
+        // Resolve 'from' address using configurable contexts from .env
+        const contextsStr = (config.mailgunSenderContexts as string) || '';
+        const contextEntries = Object.fromEntries(
+            contextsStr.split(',').filter(Boolean).map(s => {
+                const parts = s.split(':');
+                return [parts[0].toLowerCase(), parts.slice(1).join(':')];
+            })
+        );
+
+        let resolvedFromEmail = contextEntries[fromContext?.toLowerCase()] || contextEntries[type.toLowerCase()] || `postmaster@${routing.domain}`;
+        let fromDisplayName = fromContext || type.charAt(0).toUpperCase() + type.slice(1);
         
+        const from = `Techknè ${fromDisplayName} <${resolvedFromEmail}>`;
+
         // Wrap content with global layout and inject tracking pixel
         const finalHtml = html ? await wrapEmailContent(html, { 
             recipient, 
             subject, 
-            type,
+            type: type as string,
             logId, // For tracking
-            campaignId: campaignId || (type === 'newsletter' ? template : undefined) // Use template as fallback campaignId for legacy
+            alias: fromDisplayName,
+            campaignId: campaignId || (((type as string) === 'newsletter' || (type as string) === 'campaign') ? template : undefined) // Use template as fallback campaignId for legacy
         }) : '';
 
         // 3. Validate Deliverability (Stop-Gate / Advice)
         const validation = await validateEmailContent(finalHtml);
         
-        // Block only if NOT staff/system AND score is critical
-        if (type !== 'staff' && type !== 'system' && !validation.valid) {
+        // Block only if NOT staff/system/campaign AND score is critical
+        // Block only if NOT staff/system/campaign AND score is critical
+        if (type !== 'staff' && type !== 'system' && (type as string) !== 'campaign' && !validation.valid) {
             console.warn(`[Email] Delivery blocked: ${validation.error}`);
             await db.insert(emailLog).values({
                 id: logId,
@@ -216,20 +230,6 @@ export const sendEmail = async ({
         if (validation.score < 80) {
             console.warn(`[Email] Weak deliverability score for ${recipient}: ${validation.score}%. Advice: ${validation.advice.join(' ')}`);
         }
-
-        // Resolve 'from' address using configurable contexts from .env
-        const contextsStr = (config.mailgunSenderContexts as string) || '';
-        const contextEntries = Object.fromEntries(
-            contextsStr.split(',').filter(Boolean).map(s => {
-                const parts = s.split(':');
-                return [parts[0].toLowerCase(), parts.slice(1).join(':')];
-            })
-        );
-
-        let resolvedFromEmail = contextEntries[fromContext?.toLowerCase()] || contextEntries[type.toLowerCase()] || `postmaster@${routing.domain}`;
-        let fromDisplayName = fromContext || type.charAt(0).toUpperCase() + type.slice(1);
-        
-        const from = `Techknè ${fromDisplayName} <${resolvedFromEmail}>`;
 
         // 4. ROUTING STRATEGY
         
@@ -252,7 +252,7 @@ export const sendEmail = async ({
             // Stream attachments from R2/S3
             if (attachments && attachments.length > 0) {
                 mailOptions.attachments = await Promise.all(attachments.map(async (att) => {
-                    const stream = await getFromS3(att.r2Key);
+                    const stream = await getFromS3(att.s3Key);
                     return {
                         filename: att.filename,
                         content: stream,
@@ -275,6 +275,8 @@ export const sendEmail = async ({
                 sentAt: new Date()
             });
 
+            await incrementQuota();
+
             return { success: true, data: info };
         }
 
@@ -293,16 +295,24 @@ export const sendEmail = async ({
         if (cc) composerOptions.cc = cc;
         if (bcc) composerOptions.bcc = bcc;
         
-        if (type === 'newsletter') {
+        if ((type as string) === 'campaign' || type === 'newsletter' || type === 'notification') {
             const { generateUnsubscribeToken } = await import("./email-builder");
             const baseUrl = config.public.authBaseUrl || 'http://localhost:3000';
             const unsubToken = generateUnsubscribeToken(recipient);
-            const unsubUrl = `${baseUrl}/api/newsletter/unsubscribe?email=${encodeURIComponent(recipient)}&token=${unsubToken}`;
+            // URL utilisée pour le lien footer (GET classique)
+            const unsubUrl = `${baseUrl}/api/webhooks/mailgun/unsubscribe?email=${encodeURIComponent(recipient)}&token=${unsubToken}`;
+            // URL utilisée pour le One-Click POST (RFC 8058 — Gmail/Outlook natif)
+            const unsubPostUrl = `${baseUrl}/api/webhooks/mailgun/unsubscribe`;
             composerOptions.headers = {
-                'List-Unsubscribe': `<${unsubUrl}>`,
-                'X-Mailgun-Tag': campaignId || template || 'newsletter'
+                // RFC 2369 — lien cliquable dans les clients mail (fallback)
+                'List-Unsubscribe': `<${unsubUrl}>, <mailto:unsubscribe@support.techkne.com?subject=unsubscribe>`,
+                // RFC 8058 — bouton natif "Se désabonner" dans Gmail & Outlook (One-Click POST)
+                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+                'X-List-Unsubscribe-Post-URL': unsubPostUrl,
+                'X-Mailgun-Tag': campaignId || template || type,
             };
         }
+
 
         const composer = new MailComposer(composerOptions);
         const buffer = await composer.compile().build();
@@ -333,6 +343,8 @@ export const sendEmail = async ({
             campaignId: campaignId || (type === 'newsletter' ? template : undefined),
             sentAt: new Date()
         });
+
+        await incrementQuota();
 
         return { success: true, data: result };
     } catch (error: any) {

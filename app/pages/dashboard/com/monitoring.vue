@@ -63,6 +63,21 @@ const updateQuota = async (newLimit: number, newPeriod: number) => {
     }
 }
 
+const resetQuotaSaving = ref(false)
+const resetQuota = async () => {
+    resetQuotaSaving.value = true
+    try {
+        await $fetch('/api/admin/com/quota', { method: 'POST' })
+        quota.value.currentUsage = 0
+        quota.value.percent = 0
+        notify.success('Quota réinitialisé avec succès')
+    } catch (e: any) {
+        notify.error('Erreur', e.message)
+    } finally {
+        resetQuotaSaving.value = false
+    }
+}
+
 onMounted(() => {
     fetchQuota()
 })
@@ -89,7 +104,7 @@ const growthData = {
       tension: 0.4
     },
     {
-      label: 'Membres Forum',
+      label: 'Membres Community',
       backgroundColor: '#10b981',
       borderColor: '#10b981',
       data: Array.from({ length: 30 }, (_, i) => 50 + i * 8 + Math.floor(Math.random() * 30)),
@@ -105,7 +120,7 @@ const growthData = {
   ]
 }
 
-// 2. Forum Stats (Doughnut Chart)
+// 2. Community Stats (Doughnut Chart)
 const baseOptions = {
   responsive: true,
   maintainAspectRatio: false,
@@ -158,8 +173,6 @@ const retentionData = {
 
 <template>
   <UDashboardPanel id="mailing-dashboard" grow>
-    <UDashboardNavbar :title="(route.meta.title as string) || 'Monitoring KPI'" />
-
     <div class="flex-1 overflow-auto bg-neutral-50/50 dark:bg-neutral-950/20">
       <div class="p-4 lg:p-6 space-y-8 max-w-7xl mx-auto">
         
@@ -190,15 +203,26 @@ const retentionData = {
                       <UFormField label="Période (jours)" size="xs">
                           <UInput v-model="quota.period" type="number" />
                       </UFormField>
-                      <UButton 
-                        label="Sauvegarder" 
-                        icon="i-lucide:save" 
-                        color="primary" 
-                        size="xs" 
-                        block
-                        :loading="savingQuota"
-                        @click="updateQuota(quota.limit, quota.period)" 
-                      />
+                      <div class="flex items-center gap-2">
+                        <UButton 
+                          label="Sauvegarder" 
+                          icon="i-lucide:save" 
+                          color="primary" 
+                          size="xs" 
+                          class="flex-1"
+                          :loading="savingQuota"
+                          @click="updateQuota(quota.limit, quota.period)" 
+                        />
+                        <UButton 
+                          icon="i-lucide:rotate-ccw" 
+                          color="neutral" 
+                          variant="ghost"
+                          size="xs" 
+                          :loading="resetQuotaSaving"
+                          @click="resetQuota" 
+                          title="Réinitialiser le compteur de quota"
+                        />
+                      </div>
                   </div>
 
                   <div class="space-y-2 mt-auto pt-4 border-t border-primary/10">
@@ -239,7 +263,7 @@ const retentionData = {
           <!-- FORUM STATS -->
           <UCard class="flex flex-col">
             <template #header>
-               <h3 class="font-black text-xs uppercase text-dimmed tracking-widest">Statut du Forum</h3>
+               <h3 class="font-black text-xs uppercase text-dimmed tracking-widest">Statut du Community</h3>
             </template>
             <div class="relative w-full h-48">
                <Doughnut :data="forumData" :options="baseOptions" />

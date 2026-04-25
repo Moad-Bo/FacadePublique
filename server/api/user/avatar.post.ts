@@ -31,11 +31,11 @@ export default defineEventHandler(async (event) => {
 
     const extension = mimeType.split('/')[1] || 'jpg'
     const filename = `avatar-${session.user.id}-${randomUUID()}.${extension}`
-    const r2Key = `avatars/${session.user.id}/${filename}`
+    const s3Key = `avatars/${session.user.id}/${filename}`
 
     try {
         // Upload to R2
-        const publicUrl = await uploadToS3(r2Key, filePart.data, mimeType)
+        const publicUrl = await uploadToS3(s3Key, filePart.data, mimeType)
 
         // Update User in DB
         await db.update(userTable)

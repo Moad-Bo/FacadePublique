@@ -52,7 +52,8 @@ export const streamParseEML = async (stream: Readable): Promise<ParsedEML> => {
 
     parser.on('headers', (headers) => {
       meta.subject = headers.get('subject') || '(Sans objet)';
-      meta.from = formatEmailAddress(headers.get('from')?.text || '');
+      const fromHeader: any = headers.get('from');
+      meta.from = formatEmailAddress(fromHeader?.text || (typeof fromHeader === 'string' ? fromHeader : ''));
       meta.date = headers.get('date') ? new Date(headers.get('date') as string).toISOString() : new Date().toISOString();
     });
 
@@ -65,11 +66,11 @@ export const streamParseEML = async (stream: Readable): Promise<ParsedEML> => {
 
       if (data.type === 'attachment') {
         const attachmentId = randomUUID();
-        const r2Key = `attachments/${attachmentId}-${data.filename}`;
+        const s3Key = `attachments/${attachmentId}-${data.filename}`;
         
         // Start streaming upload to R2 immediately
         const uploadPromise = uploadStreamToS3(
-          r2Key, 
+          s3Key, 
           data.content, 
           data.contentType,
           { 'status': 'pending', 'original-filename': data.filename }
@@ -79,7 +80,7 @@ export const streamParseEML = async (stream: Readable): Promise<ParsedEML> => {
             filename: data.filename,
             contentType: data.contentType,
             size: data.size,
-            r2Key,
+            s3Key,
             publicUrl: url
           });
         });
@@ -96,7 +97,7 @@ export const streamParseEML = async (stream: Readable): Promise<ParsedEML> => {
 
         // All uploads succeeded, promote tags to "Validated"
         await Promise.all(attachments.map(att => 
-          updateObjectTags(att.r2Key, { 'status': 'validated' }).catch(e => console.error(`Failed to update tag for ${att.r2Key}`, e))
+          updateObjectTags(att.s3Key, { 'status': 'validated' }).catch(e => console.error(`Failed to update tag for ${att.s3Key}`, e))
         ));
 
         resolve({

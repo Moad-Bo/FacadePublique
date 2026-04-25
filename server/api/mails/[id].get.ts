@@ -54,7 +54,7 @@ export default defineEventHandler(async (event) => {
                     filename: a.filename,
                     size: a.size,
                     mimeType: a.mimeType,
-                    url: getS3PublicUrl(a.r2Key)
+                    url: getS3PublicUrl(a.s3Key)
                 }))
             }
         }))
@@ -73,7 +73,7 @@ export default defineEventHandler(async (event) => {
                     filename: a.filename,
                     size: a.size,
                     mimeType: a.mimeType,
-                    url: getS3PublicUrl(a.r2Key)
+                    url: getS3PublicUrl(a.s3Key)
                 })),
                 thread: threadMails
             }

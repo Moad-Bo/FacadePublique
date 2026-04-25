@@ -1,4 +1,4 @@
-import { scule } from 'scule';
+import scule from 'scule';
 
 /**
  * Generates a Reddit-style slug: "title-text-a1b2c3"
