@@ -1,3 +1,5 @@
+import path from 'node:path'
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2024-07-15',
@@ -200,7 +202,7 @@ export default defineNuxtConfig({
     preset: 'vercel',
     // On mocke secure-exec pour éviter les erreurs de build sans l'installer (sécurité)
     alias: {
-      'secure-exec': 'unenv/runtime/mock/proxy'
+      'secure-exec': path.resolve(__dirname, 'server/utils/mock-secure-exec.ts')
     },
     prerender: {
       crawlLinks: true,
