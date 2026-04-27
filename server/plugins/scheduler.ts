@@ -2,6 +2,11 @@ import { defineNitroPlugin } from 'nitropack/runtime/plugin'
 import { processQueue } from '../utils/scheduler'
 
 export default defineNitroPlugin((nitroApp) => {
+    // Ne pas démarrer le scheduler pendant le build ou le pré-rendu
+    if (import.meta.prerender || process.env.NUXT_PRERENDER === 'true') {
+        return
+    }
+
     console.log('[Nitro] Starting Email Scheduler Plugin...')
     
     // Simple interval worker - every 60 seconds

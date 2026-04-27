@@ -129,6 +129,15 @@ export default defineNuxtConfig({
     }
   },
 
+  icon: {
+    // On évite de packer toute la collection locale (10MB+) dans le bundle serveur
+    // On laisse le scan détecter uniquement les icônes utilisées
+    serverBundle: 'remote', 
+    clientBundle: {
+      scan: true
+    }
+  },
+
   vite: {
     server: {
       allowedHosts: true
@@ -189,11 +198,20 @@ export default defineNuxtConfig({
 
   nitro: {
     preset: 'vercel',
+    // On mocke secure-exec pour éviter les erreurs de build sans l'installer (sécurité)
+    alias: {
+      'secure-exec': 'unenv/runtime/mock/proxy'
+    },
+    prerender: {
+      crawlLinks: true,
+      ignore: [
+        '/__nuxt_content/**', // Évite le rerendering des lourds dumps SQL de Content v3
+        '/llms.txt'
+      ]
+    },
     routeRules: {
       '/**': {
         headers: {
-          // Fix Error with Permissions-Policy header: Unrecognized feature
-          // We set a minimum baseline to override any browser-injected trial features
           'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
         }
       }
