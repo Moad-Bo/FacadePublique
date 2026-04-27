@@ -1,8 +1,11 @@
 import { defineContentConfig, defineCollection, z } from '@nuxt/content'
 
 // Nuxt Content v3 configuration
-// We avoid curly brace globs as they seem to cause string offset issues in the current dev environment.
 export default defineContentConfig({
+  database: {
+    driver: 'sqlite',
+    url: 'file:./content.db',
+  },
   collections: {
     // ── Global Collections ──────────────────────────────────────
     content_fr: defineCollection({

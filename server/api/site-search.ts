@@ -15,9 +15,9 @@ export default defineEventHandler(async (event) => {
     { title: 'Tableau de bord', path: '/dashboard', description: 'Gérez vos données', category: 'App' }
   ]
 
-  // 2. Fetch pages Markdown via Nuxt Content v3 (depuis SQLite en mémoire)
-  const docsFr = await queryCollection('docs_fr' as any).select('title', 'path', 'description').all()
-  const docsEn = await queryCollection('docs_en' as any).select('title', 'path', 'description').all()
+  // 2. Fetch pages Markdown via Nuxt Content v3 (depuis SQLite local)
+  const docsFr = await queryCollection('content_fr' as any).select('title', 'path', 'description').all()
+  const docsEn = await queryCollection('content_en' as any).select('title', 'path', 'description').all()
 
   const contentPages = [
     ...(Array.isArray(docsFr) ? docsFr.map(p => ({ ...p, category: 'Docs (FR)' })) : []),

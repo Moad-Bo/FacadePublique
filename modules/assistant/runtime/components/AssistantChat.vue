@@ -6,7 +6,7 @@ const { toggle } = useAssistant()
 const { t } = useDocusI18n()
 
 const tooltipText = computed(() => t('assistant.tooltip'))
-const triggerIcon = computed(() => appConfig.assistant?.icons?.trigger || 'i-custom-ai')
+const triggerIcon = computed(() => (appConfig as any).assistant?.icons?.trigger || 'i-custom-ai')
 </script>
 
 <template>

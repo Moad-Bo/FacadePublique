@@ -40,10 +40,10 @@ export default defineNuxtConfig({
     mailgunSenderContexts: process.env.MAILGUN_SENDER_CONTEXTS
       // Fallback auto-construit depuis les 3 variables de domaine officielles
       || [
-          `Support:${process.env.MAIL_DOMAIN_SUPPORT || 'contact@support.techkne.com'}`,
-          `Newsletter:${process.env.MAIL_DOMAIN_MARKETING || 'marketing@support.techkne.com'}`,
-          `Système:${process.env.MAIL_DOMAIN_SYSTEM || 'system@support.techkne.com'}`,
-        ].join(','),
+        `Support:${process.env.MAIL_DOMAIN_SUPPORT || 'contact@support.techkne.com'}`,
+        `Newsletter:${process.env.MAIL_DOMAIN_MARKETING || 'marketing@support.techkne.com'}`,
+        `Système:${process.env.MAIL_DOMAIN_SYSTEM || 'system@support.techkne.com'}`,
+      ].join(','),
     // Clés publiques (accessibles depuis le client via useRuntimeConfig().public)
     public: {
       authBaseUrl: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
@@ -53,6 +53,10 @@ export default defineNuxtConfig({
         .split(',')
         .map(s => s.split(':')[0].trim())
         .join(','),
+      assistant: {
+        enabled: true,
+        apiPath: '/__docus__/assistant'
+      }
     }
   },
 
@@ -70,6 +74,7 @@ export default defineNuxtConfig({
 
   modules: [
     './modules/assistant',
+    '@nuxtjs/mcp-toolkit',
     "@nuxt/ui",
     "@nuxt/fonts",
     "@nuxt/icon",
@@ -77,10 +82,20 @@ export default defineNuxtConfig({
     "@nuxt/content",
     "@nuxtjs/i18n",
     "@nuxtjs/seo",
+    "nuxt-llms",
     // 'nuxt-studio'
     "@vueuse/nuxt",
     'vue3-carousel-nuxt'
   ],
+
+  llms: {
+    domain: 'https://facadepublique.com',
+    title: 'Facade Publique',
+    description: 'Documentation et outils pour la communication publique.',
+    contentRawMarkdown: {
+      rewriteLLMSTxt: true
+    }
+  },
 
   alias: {
     '~': './app',
@@ -103,9 +118,11 @@ export default defineNuxtConfig({
   },
 
   content: {
+    experimental: { sqliteConnector: 'native' },
     build: {
       markdown: {
         highlight: {
+          langs: ['bash', 'diff', 'json', 'js', 'ts', 'html', 'css', 'vue', 'shell', 'mdc', 'md', 'yaml'],
           theme: 'github-dark'
         }
       }
@@ -146,10 +163,32 @@ export default defineNuxtConfig({
         'prosemirror-view',
         'prosemirror-gapcursor'
       ]
-    }
+    },
+    plugins: [
+      {
+        name: 'ai-assistant-vercel-fix',
+        config(config) {
+          if (process.env.AI_GATEWAY_API_KEY) {
+            config.optimizeDeps ||= {}
+            config.optimizeDeps.include ||= []
+            if (!config.optimizeDeps.include.includes('@vercel/oidc')) {
+              config.optimizeDeps.include.push('@vercel/oidc')
+            }
+          }
+        }
+      }
+    ]
   },
 
+  sourcemap: {
+    server: false,
+    client: false
+  },
+
+  telemetry: false,
+
   nitro: {
+    preset: 'vercel',
     routeRules: {
       '/**': {
         headers: {

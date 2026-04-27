@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import { queryCollection } from '@nuxt/content/server'
 import type { Collections } from '@nuxt/content'
-import { getAvailableLocales, getCollectionFromPath } from '../../../utils/content'
-import { inferSiteURL } from '../../../utils/meta'
+import { getAvailableLocales, getCollectionFromPath } from '../../utils/content'
+import { inferSiteURL } from '../../utils/meta'
 
 export default defineMcpTool({
   description: `Retrieves the full content and details of a specific documentation page.
@@ -27,41 +27,10 @@ WORKFLOW: This tool returns the complete page content including title, descripti
     const siteUrl = getRequestURL(event).origin || inferSiteURL()
 
     const availableLocales = getAvailableLocales(config)
-    const collectionName = config.i18n?.locales
-      ? getCollectionFromPath(path, availableLocales)
-      : 'docs'
-
-function extractProseFromAst(node: any): string {
-  if (!node) return ''
-  if (node.type === 'text') return node.value || ''
-  
-  if (node.type === 'element') {
-    // Skip Vue components (usually capitalized tags)
-    if (node.tag && /^[A-Z]/.test(node.tag)) {
-      return ''
-    }
-    
-    if (node.children && Array.isArray(node.children)) {
-      const childrenText = node.children.map(extractProseFromAst).join('')
-      
-      if (['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote', 'div', 'pre'].includes(node.tag)) {
-        return childrenText + '\n\n'
-      }
-      // Add a space for some inline elements if needed, but simple join is usually fine
-      if (node.tag === 'li') return '- ' + childrenText + '\n'
-      return childrenText
-    }
-  }
-  
-  if (node.type === 'root' && node.children) {
-    return node.children.map(extractProseFromAst).join('')
-  }
-  
-  return ''
-}
+    const collectionName = getCollectionFromPath(path, availableLocales)
 
     try {
-      const page: any = await queryCollection(event, collectionName as keyof Collections)
+      const page = await queryCollection(event, collectionName as keyof Collections)
         .where('path', '=', path)
         .first()
 
@@ -69,14 +38,14 @@ function extractProseFromAst(node: any): string {
         return errorResult('Page not found')
       }
 
-      // Extract raw text from the parsed Nuxt Content AST, ignoring Vue components
-      const content = extractProseFromAst(page.body)
+      // Utilise nuxt-llms pour récupérer le Markdown brut optimisé pour les IA
+      const content = await event.fetch<string>(`/_llms/raw${path}.md`).catch(() => '')
 
       return jsonResult({
         title: page.title,
         path: page.path,
         description: page.description,
-        content: content.trim(),
+        content: content || page.description || 'Contenu indisponible.',
         url: `${siteUrl}${page.path}`,
       })
     }

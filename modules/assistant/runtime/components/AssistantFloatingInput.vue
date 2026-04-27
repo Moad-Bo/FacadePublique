@@ -10,9 +10,9 @@ const input = ref('')
 const isVisible = ref(true)
 const inputRef = ref<{ inputRef: HTMLInputElement } | null>(null)
 
-const isDocsRoute = computed(() => route.meta.layout === 'docs')
-const isFloatingInputEnabled = computed(() => appConfig.assistant?.floatingInput !== false)
-const focusInputShortcut = computed(() => appConfig.assistant?.shortcuts?.focusInput || 'meta_i')
+const isDocsRoute = computed(() => (route.meta.layout as any) === 'docs')
+const isFloatingInputEnabled = computed(() => (appConfig as any).assistant?.floatingInput !== false)
+const focusInputShortcut = computed(() => (appConfig as any).assistant?.shortcuts?.focusInput || 'meta_i')
 const placeholder = computed(() => t('assistant.placeholder'))
 
 const shortcutDisplayKeys = computed(() => {

@@ -1,0 +1,14 @@
+.git
+.nuxt
+.output
+node_modules
+dist
+.env
+*.log
+knowledgebase/analyse
+knowledgebase/setup-instruction
+tests
+vitest.config.ts
+vitest.integration.config.ts
+README.md
+LivrableAttendu.md

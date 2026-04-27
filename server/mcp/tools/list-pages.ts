@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import { queryCollection } from '@nuxt/content/server'
 import type { Collections } from '@nuxt/content'
-import { getAvailableLocales, getCollectionsToQuery } from '../../../utils/content'
-import { inferSiteURL } from '../../../utils/meta'
+import { getAvailableLocales, getCollectionsToQuery } from '../../utils/content'
+import { inferSiteURL } from '../../utils/meta'
 
 export default defineMcpTool({
   description: `Lists all available documentation pages with their categories and basic information.
@@ -24,7 +24,7 @@ OUTPUT: Returns a structured list with:
 - description: Brief summary of page content
 - url: Full URL for reference`,
   inputSchema: {
-    locale: z.string().optional().describe('The locale to filter pages by'),
+    locale: z.string().optional().describe('The locale to filter pages by (e.g., "en", "fr")'),
   },
   cache: '1h',
   handler: async ({ locale }) => {
@@ -36,20 +36,26 @@ OUTPUT: Returns a structured list with:
     const collections = getCollectionsToQuery(locale, availableLocales)
 
     try {
-      const pages = await queryCollection(event, 'docs')
-        .select('title', 'path', 'description')
-        .all()
+      const allPages = await Promise.all(
+        collections.map(async (collectionName) => {
+          const pages = await queryCollection(event, collectionName as keyof Collections)
+            .select('title', 'path', 'description')
+            .all()
 
-      const result = pages.map(page => ({
-        title: page.title,
-        path: page.path,
-        description: page.description,
-        url: `${siteUrl}${page.path}`,
-      }))
+          return pages.map(page => ({
+            title: page.title,
+            path: page.path,
+            description: page.description,
+            locale: collectionName.replace('content_', ''), // Ajustement par rapport au préfixe content_
+            url: `${siteUrl}${page.path}`,
+          }))
+        }),
+      )
 
-      return jsonResult(result)
+      return jsonResult(allPages.flat())
     }
-    catch {
+    catch (e) {
+      console.error(e)
       return errorResult('Failed to list pages')
     }
   },
