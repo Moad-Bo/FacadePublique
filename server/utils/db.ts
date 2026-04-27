@@ -4,16 +4,20 @@ import fs from 'fs';
 import path from 'path';
 import * as schema from '../../drizzle/src/db/schema';
 
-const caPath = process.env.MYSQL_SSL_CA;
-let caCert = undefined;
+// TiDB (MySQL) requires a certificate for secure connections.
+// We prefer a local file in server/keys/content-db.pem if available.
+const caPath = process.env.MYSQL_SSL_CA || 'server/keys/content-db.pem';
+let caCert: string | undefined = undefined;
 
-if (caPath) {
-    try {
-        const fullPath = path.isAbsolute(caPath) ? caPath : path.resolve(process.cwd(), caPath);
+try {
+    const fullPath = path.isAbsolute(caPath) ? caPath : path.resolve(process.cwd(), caPath);
+    if (fs.existsSync(fullPath)) {
         caCert = fs.readFileSync(fullPath, 'utf8');
-    } catch (e: any) {
-        console.error("Erreur lecture SSL CA:", e.message);
+    } else {
+        console.warn("SSL CA file not found at:", fullPath);
     }
+} catch (e: any) {
+    console.error("Erreur l'ors de la lecture du fichier SSL CA:", e.message);
 }
 
 const poolConnection = mysql.createPool({
@@ -26,7 +30,7 @@ const poolConnection = mysql.createPool({
         rejectUnauthorized: true,
         ca: caCert,
     } : undefined,
-    connectTimeout: 5000, 
+    connectTimeout: 5000,
     waitForConnections: true,
     connectionLimit: 30, // Reduced to avoid saturating TiDB Cloud
     enableKeepAlive: true,

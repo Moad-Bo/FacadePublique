@@ -50,3 +50,4 @@ server/keys/*.pem
 pk-APKA22KRQZSIJVOMET7RPRV.pem
 #TIDB
 content-db.pem
+.vercel
