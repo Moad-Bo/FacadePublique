@@ -1,7 +1,7 @@
 import FormData from "form-data";
 import Mailgun from "mailgun.js";
 import { simpleParser } from "mailparser";
-import MailComposer from "nodemailer/lib/mail-composer";
+import MailComposer from "nodemailer/lib/mail-composer/index.js";
 import nodemailer from "nodemailer";
 import { db } from "./db";
 import { emailLog, settings } from "../../drizzle/src/db/schema";
