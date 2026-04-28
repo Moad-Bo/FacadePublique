@@ -5,21 +5,36 @@ import path from 'path';
 import * as schema from '../../drizzle/src/db/schema';
 
 // TiDB (MySQL) requires a certificate for secure connections.
-// We prefer a local file in server/keys/content-db.pem if available.
-const caPath = process.env.MYSQL_SSL_CA || 'server/keys/content-db.pem';
-let caCert: string | undefined = undefined;
+const getCACert = () => {
+    const caEnv = process.env.MYSQL_SSL_CA;
+    if (caEnv && caEnv.startsWith('-----BEGIN CERTIFICATE-----')) return caEnv;
 
-try {
-    const fullPath = path.isAbsolute(caPath) ? caPath : path.resolve(process.cwd(), caPath);
-    if (fs.existsSync(fullPath)) {
-        caCert = fs.readFileSync(fullPath, 'utf8');
-    } else {
-        console.warn("SSL CA file not found at:", fullPath);
+    const relativePath = caEnv || 'server/keys/content-db.pem';
+    const searchPaths = [
+        path.resolve(process.cwd(), relativePath),
+        path.resolve(process.cwd(), '..', relativePath),
+        typeof import.meta.dirname !== 'undefined' ? path.resolve(import.meta.dirname, '../../server/keys/content-db.pem') : undefined,
+        typeof import.meta.dirname !== 'undefined' ? path.resolve(import.meta.dirname, '../../../server/keys/content-db.pem') : undefined,
+        // On Vercel, sometimes files are in /var/task/server/keys/...
+        '/var/task/server/keys/content-db.pem'
+    ].filter((p): p is string => typeof p === 'string');
+
+    for (const fullPath of searchPaths) {
+        try {
+            if (fs.existsSync(fullPath)) {
+                return fs.readFileSync(fullPath, 'utf8');
+            }
+        } catch (e) {}
     }
-} catch (e: any) {
-    console.error("Erreur l'ors de la lecture du fichier SSL CA:", e.message);
+    return undefined;
+};
+
+const caCert = getCACert();
+if (!caCert && !import.meta.prerender) {
+    console.warn("⚠️ SSL CA file not found. Database connection might fail if required.");
 }
 
+// Create the pool connection
 const poolConnection = mysql.createPool({
     host: process.env.MYSQL_HOST,
     port: Number(process.env.MYSQL_PORT),
@@ -30,13 +45,12 @@ const poolConnection = mysql.createPool({
         rejectUnauthorized: true,
         ca: caCert,
     } : undefined,
-    connectTimeout: 5000,
+    connectTimeout: import.meta.prerender ? 2000 : 10000, // Short timeout during build
     waitForConnections: true,
-    connectionLimit: 30, // Reduced to avoid saturating TiDB Cloud
+    connectionLimit: 30,
     enableKeepAlive: true,
-    keepAliveInitialDelay: 10000,
     maxIdle: 10,
-    idleTimeout: 60000
 });
 
+// Export drizzle instance - adding a failsafe layer for prerendering
 export const db = drizzle(poolConnection, { schema, mode: 'default' });

@@ -5,7 +5,7 @@
 .nitro
 .cache
 dist
-
+audit_eml.ts
 
 #personal files
 ./content/.obsidian
@@ -24,7 +24,8 @@ logs
 .fleet
 .idea
 .eslintcache
-
+dev.log
+migrate.ts
 # Local env files
 .env
 .env.*
@@ -51,3 +52,7 @@ pk-APKA22KRQZSIJVOMET7RPRV.pem
 #TIDB
 content-db.pem
 .vercel
+
+.status
+.tests
+

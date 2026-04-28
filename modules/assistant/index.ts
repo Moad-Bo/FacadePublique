@@ -33,7 +33,10 @@ export default defineNuxtModule<AssistantModuleOptions>({
     model: 'google/gemini-3-flash',
   },
   setup(options, nuxt) {
-    const hasApiKey = !!process.env.AI_GATEWAY_API_KEY
+    // En production, on laisse l'assistant activé par défaut dans la config publique
+    // même si la clé est absente au BUILD (car elle sera là au RUNTIME).
+    const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL
+    const hasApiKey = !!process.env.AI_GATEWAY_API_KEY || isProd
 
     const { resolve } = createResolver(import.meta.url)
 
@@ -66,7 +69,7 @@ export default defineNuxtModule<AssistantModuleOptions>({
       }),
     )
 
-    if (!hasApiKey) {
+    if (!hasApiKey && !isProd) {
       log.warn('AI assistant disabled: AI_GATEWAY_API_KEY not found')
       return
     }

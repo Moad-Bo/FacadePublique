@@ -102,6 +102,7 @@ export default defineEventHandler(async (event) => {
     transport = {
       type: 'http',
       url: `${getRequestURL(event).origin}${baseURL}${mcpServer}`,
+      // @ts-expect-error - fetch is supported by the underlying MCP SDK but missing from AI SDK types
       fetch: createLocalFetch(event),
     }
   }
