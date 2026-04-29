@@ -1,21 +1,18 @@
+import { defineEventHandler, readValidatedBody, createError } from 'h3'
 import { requireUserSession } from "../../utils/auth";
 import { sendEmail } from "../../utils/email";
 import { scheduleEmail } from "../../utils/scheduler";
 import { getDynamicTemplate } from "../../utils/templates";
+import { SendMailSchema } from "../../utils/schemas";
 
 export default defineEventHandler(async (event) => {
     await requireUserSession(event, { permission: "manage_mail" });
     
-    const body = await readBody(event);
+    // Validation du corps de la requête via Zod
+    const body = await readValidatedBody(event, SendMailSchema.parse);
     const { to, cc, bcc, subject, message, type, templateId, scheduledAt, recurrence, recurrenceValue, timezone, fromContext } = body;
     
-    console.log(`[API Mails Send] Received request for ${to} (Template: ${templateId})`);
-
-    // Basic email validation regex
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    if (!to) throw createError({ statusCode: 400, statusMessage: "Missing recipient" });
-    if (!emailRegex.test(to)) throw createError({ statusCode: 400, statusMessage: "Invalid email" });
+    console.log(`[API Mails Send] Validated request for ${to} (Template: ${templateId})`);
 
     let finalSubject = subject;
     let finalHtml = message;
@@ -23,7 +20,7 @@ export default defineEventHandler(async (event) => {
     // Handle DB Templates
     if (templateId && templateId !== 'none') {
         const t = await getDynamicTemplate(templateId, {
-            url: message || 'https://techkne.com', // fallback for URL if provided in message
+            url: message || 'https://techkne.com',
             message: message || '',
             name: to.split('@')[0]
         });

@@ -7,10 +7,42 @@ export enum EmailContext {
   SYSTEM = "system",
   COMMUNITY_TX = "forum_tx",
   BLOG_TX = "blog_tx",
-  MARKETING_BATCH = "marketing_batch",
-  BLOG_BATCH = "blog_batch",
-  WEBMAILER = "webmailer"
+  WEBMAILER = "webmailer",
+  MODERATION = "moderation",
+  // Nouveaux contextes campagne typés
+  CAMPAIGN_NEWSLETTER = "campaign_newsletter",
+  CAMPAIGN_CHANGELOG  = "campaign_changelog",
+  CAMPAIGN_PROMO      = "campaign_promo",
 }
+
+/**
+ * Table de configuration agnostique des campagnes.
+ */
+export const CAMPAIGN_CONTEXT_CONFIG: Record<string, {
+  envKey: string;
+  optInField: 'optInNewsletter' | 'optInMarketing';
+  alias: string;
+  description: string;
+}> = {
+  [EmailContext.CAMPAIGN_NEWSLETTER]: {
+    envKey:      'mailDomainCampaignNewsletter',
+    optInField:  'optInNewsletter',
+    alias:       'Techknè Newsletter',
+    description: 'Newsletter éditoriale régulière',
+  },
+  [EmailContext.CAMPAIGN_CHANGELOG]: {
+    envKey:      'mailDomainCampaignChangelog',
+    optInField:  'optInNewsletter',
+    alias:       'Techknè Changelog',
+    description: 'Notes de mise à jour produit',
+  },
+  [EmailContext.CAMPAIGN_PROMO]: {
+    envKey:      'mailDomainCampaignPromo',
+    optInField:  'optInMarketing',
+    alias:       'Techknè Offres',
+    description: 'Communications promotionnelles et offres',
+  },
+};
 
 export interface EmailRoutingResult {
   allowed: boolean;
@@ -21,7 +53,6 @@ export interface EmailRoutingResult {
 
 /**
  * Service de routage intelligent des emails
- * Gère l'isolation des domaines et les vérifications d'opt-in
  */
 export const emailRouter = {
   async getRouting(context: EmailContext, recipient: string): Promise<EmailRoutingResult> {
@@ -45,22 +76,22 @@ export const emailRouter = {
         }
         return { allowed: true, domain: config.mailDomainSystem, method: "api" };
 
-      case EmailContext.MARKETING_BATCH:
-        const audienceMkt = await this._getAudience(email);
-        if (!audienceMkt || (!audienceMkt.optInMarketing && !audienceMkt.optInNewsletter)) {
-          return { allowed: false, domain: config.mailDomainMarketing, method, reason: "No marketing opt-in" };
+      case EmailContext.CAMPAIGN_NEWSLETTER:
+      case EmailContext.CAMPAIGN_CHANGELOG:
+      case EmailContext.CAMPAIGN_PROMO:
+        const conf = CAMPAIGN_CONTEXT_CONFIG[context];
+        const audienceCamp = await this._getAudience(email);
+        if (!audienceCamp || !audienceCamp[conf.optInField]) {
+          return { allowed: false, domain: (config as any)[conf.envKey]?.split('@').pop() || domain, method, reason: `No ${conf.optInField} opt-in` };
         }
-        return { allowed: true, domain: config.mailDomainMarketing, method: "api" };
-
-      case EmailContext.BLOG_BATCH:
-        const audienceBlog = await this._getAudience(email);
-        if (!audienceBlog || !audienceBlog.optInNewsletter) {
-          return { allowed: false, domain: config.mailDomainMarketing, method, reason: "No newsletter opt-in" };
-        }
-        return { allowed: true, domain: config.mailDomainMarketing, method: "api" };
+        return { allowed: true, domain: (config as any)[conf.envKey]?.split('@').pop() || domain, method: "api" };
 
       case EmailContext.WEBMAILER:
         return { allowed: true, domain: config.mailDomainSupport, method: "smtp" };
+
+      case EmailContext.MODERATION:
+        const modDomain = config.mailEmailMod?.split('@').pop() || config.mailDomainSupport;
+        return { allowed: true, domain: modDomain, method: "smtp" };
 
       default:
         return { allowed: true, domain, method };

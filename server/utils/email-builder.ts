@@ -53,7 +53,7 @@ const BRAND_CONFIG = {
     logoText: 'TECHKNÈ',
     logoAccent: 'GROUP',
     primaryColor: '#6366f1',
-    footerText: 'Techknè Group - Plateforme d\'Accompagnement Technologique',
+    footerText: 'Techknè - Plateforme de Communication Agnostique',
     supportUrl: 'https://support.techkne.com',
     baseUrl: process.env.BETTER_AUTH_URL || 'http://localhost:3000'
 };
@@ -170,7 +170,7 @@ export async function wrapEmailContent(content: string, options: {
     const dateStr = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const unsubToken = generateUnsubscribeToken(recipient);
     const baseUrl = BRAND_CONFIG.baseUrl;
-    const unsubLink = `${baseUrl}/api/newsletter/unsubscribe?email=${encodeURIComponent(recipient)}&token=${unsubToken}`;
+    const unsubLink = `${baseUrl}/api/campaign/unsubscribe?email=${encodeURIComponent(recipient)}&token=${unsubToken}`;
 
     // 2. Fetch Layout
     let shell = '';

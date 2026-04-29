@@ -12,7 +12,7 @@ const layoutSchema = z.object({
     action: z.enum(['create', 'update', 'delete', 'set-default']).optional().default('update'),
     name: z.string().min(1, 'Le nom est requis').optional(),
     html: z.string().min(1, 'Le HTML est requis').optional(),
-    category: z.enum(['system', 'newsletter', 'contact', 'notification', 'mod-forum', 'content_layout']).optional(),
+    category: z.enum(['system', 'newsletter', 'contact', 'support', 'moderation', 'notification', 'mod-forum', 'content_layout']).optional(),
     description: z.string().optional(),
 })
 

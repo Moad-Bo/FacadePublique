@@ -1,9 +1,10 @@
 import { defineEventHandler, createError } from 'h3'
 import { db } from '../../utils/db'
-import { campaign, audience } from '../../../drizzle/src/db/schema'
-import { eq, or } from 'drizzle-orm'
+import { campaign, audience, emailQueue } from '../../../drizzle/src/db/schema'
+import { eq, or, and } from 'drizzle-orm'
 import { requireUserSession } from '../../utils/auth'
-import { scheduleEmail } from '../../utils/scheduler'
+import { sendBatchCampaign } from '../../utils/email'
+import { EmailContext } from '../../utils/email-router'
 import { validateBody } from '../../utils/validation'
 import { z } from 'zod'
 import { randomUUID } from 'crypto'
@@ -13,7 +14,7 @@ const campaignSchema = z.object({
     id: z.string().optional(),
     action: z.enum(['publish', 'draft']).optional().default('publish'),
     templateId: z.string().optional(),
-    name: z.string().optional(), // Rendu optionnel pour les envois directs
+    name: z.string().optional(),
     subject: z.string().min(1, 'L\'objet est requis'),
     content: z.string().min(1, 'Le contenu est requis'),
     scheduledAt: z.string().optional(),
@@ -23,23 +24,28 @@ const campaignSchema = z.object({
     layoutId: z.string().optional().default('campaign'),
     contentLayoutId: z.string().optional(),
     fromContext: z.string().optional().default('Newsletter'),
+    // Type de campagne — détermine l'alias expéditeur et les règles d'opt-in
+    campaignType: z.enum([
+        'campaign_newsletter',  // EmailContext.CAMPAIGN_NEWSLETTER
+        'campaign_changelog',   // EmailContext.CAMPAIGN_CHANGELOG
+        'campaign_promo',       // EmailContext.CAMPAIGN_PROMO
+    ]).optional().default('campaign_newsletter'),
 })
 
 export default defineEventHandler(async (event) => {
     const { user } = await requireUserSession(event, { permission: 'manage_campaign' })
-    
+
     try {
         const body = await validateBody(event, campaignSchema)
         const { id, action, templateId, subject, content, scheduledAt, recurrence, recurrenceValue, timezone, layoutId, contentLayoutId, fromContext } = body
-        
-        // Gérer le nom par défaut si manquant (Webmailing direct)
-        let name = body.name || `Envoi Direct - ${fromContext} - ${new Date().toLocaleDateString()}`
 
-        let campaignId = id || randomUUID()
+        const name = body.name || `Campagne - ${fromContext} - ${new Date().toLocaleDateString('fr-FR')}`
+        const campaignId = id || randomUUID()
         const resolvedScheduledAt = scheduledAt ? new Date(scheduledAt) : new Date()
-        const isFutureScheduled = scheduledAt && resolvedScheduledAt.getTime() > Date.now()
+        // Marge de 30s : en dessous, on considère l'envoi comme immédiat
+        const isFutureScheduled = scheduledAt && resolvedScheduledAt.getTime() > Date.now() + 30_000
 
-        // 1. CREATE OR UPDATE RECORD
+        // ─── 1. Création ou mise à jour de l'enregistrement campagne ─────────
         if (id) {
             await db.update(campaign)
                 .set({
@@ -69,16 +75,16 @@ export default defineEventHandler(async (event) => {
             })
         }
 
-        // 2. IF PUBLISHING -> QUEUE EMAILS & TRIGGER MENTIONS
+        // ─── 2. Publication ────────────────────────────────────────────────────
         if (action === 'publish') {
-            // Trigger Mentions Notification for Back-Office/Community
+
             await processMentions(content, {
                 authorName: user.name,
                 authorEmail: user.email,
                 contextUrl: `/dashboard/com/campaigns/${campaignId}`
-            });
+            })
 
-            // Get all active subscribers from Audience (Single Source of Truth)
+            // Audience nécessaire dans les deux chemins (compteur + envoi immédiat)
             const subscribers = await db.select()
                 .from(audience)
                 .where(
@@ -87,59 +93,87 @@ export default defineEventHandler(async (event) => {
                         eq(audience.optInMarketing, true)
                     )
                 )
-            
+
             if (subscribers.length === 0) {
                 return { success: false, error: 'Aucun abonné actif trouvé.' }
             }
 
-            await db.transaction(async (tx) => {
-                // If it was already scheduled, clear previous queue for this campaign
-                // emailQueue.template field is used to store campaignId (as per current code line 62 in original)
-                // Actually, line 185 in schema says 'template' is a string.
-                const { emailQueue } = await import('../../../drizzle/src/db/schema');
-                const { and } = await import('drizzle-orm');
-                
-                await tx.delete(emailQueue).where(
-                    and(
-                        eq(emailQueue.template, campaignId),
-                        eq(emailQueue.status, 'pending')
-                    )
-                );
+            await db.update(campaign)
+                .set({ totalRecipients: subscribers.length })
+                .where(eq(campaign.id, campaignId))
 
-                // Update total recipients
-                await tx.update(campaign)
-                    .set({ 
-                        totalRecipients: subscribers.length,
-                        sentAt: isFutureScheduled ? null : new Date()
-                    })
-                    .where(eq(campaign.id, campaignId));
+            // ── CHEMIN A : Envoi immédiat ──────────────────────────────────────
+            if (!isFutureScheduled) {
+                const batchResult = await sendBatchCampaign({
+                    context:      body.campaignType || EmailContext.CAMPAIGN_NEWSLETTER,
+                    subject,
+                    htmlTemplate: content,
+                    subscribers,
+                    campaignId
+                })
 
-                // Queue emails individually
-                for (const sub of subscribers) {
-                    await scheduleEmail({
-                        recipient: sub.email,
-                        subject,
-                        html: content,
-                        type: 'campaign',
-                        template: campaignId,
-                        scheduledAt: resolvedScheduledAt,
-                        timezone: timezone || "Europe/Paris",
-                        layoutId: layoutId || "newsletter",
-                        fromContext
-                    })
+                await db.update(campaign)
+                    .set({ sentAt: new Date(), status: 'sent' })
+                    .where(eq(campaign.id, campaignId))
+
+                if (!batchResult.success && batchResult.sent === 0) {
+                    console.error(`[Campaign] Batch échoué pour ${campaignId}:`, batchResult.error)
+                } else {
+                    console.info(`[Campaign] ✅ ${campaignId}: ${batchResult.sent} envoi(s) en ${batchResult.chunks} chunk(s).`)
                 }
-            });
 
-            return { 
-                success: true, 
-                campaignId, 
-                status: isFutureScheduled ? 'scheduled' : 'sending',
-                queuedRecipients: subscribers.length,
-                scheduledAt: resolvedScheduledAt
+                return {
+                    success: true,
+                    campaignId,
+                    status: 'sent',
+                    sentRecipients: batchResult.sent,
+                    chunks: batchResult.chunks,
+                }
+            }
+
+            // ── CHEMIN B : Planification différée (1 seule ligne en DB) ─────────
+            // Annule les éventuels batches déjà planifiés pour cette campagne
+            await db.delete(emailQueue).where(
+                and(
+                    eq(emailQueue.template, campaignId),
+                    eq(emailQueue.type, 'campaign_batch' as any),
+                    eq(emailQueue.status, 'pending')
+                )
+            )
+
+            // 1 seule ligne en DB — le scheduler appellera sendBatchCampaign au bon moment
+            const queueId = randomUUID()
+            await db.insert(emailQueue).values({
+                id:              queueId,
+                recipient:       '__batch__',        // Sentinelle : pas d'envoi individuel
+                subject,
+                html:            content,
+                type:            'campaign_batch' as any,
+                fromContext:     body.campaignType || EmailContext.CAMPAIGN_NEWSLETTER,
+                template:        campaignId,          // Référence campagne parente
+                status:          'pending',
+                scheduledAt:     resolvedScheduledAt,
+                recurrence:      recurrence || 'none',
+                recurrenceValue: recurrenceValue,
+                timezone:        timezone || 'Europe/Paris',
+                layoutId,
+                createdAt:       new Date(),
+                updatedAt:       new Date()
+            })
+
+            console.info(`[Campaign] 📅 Campagne ${campaignId} planifiée pour le ${resolvedScheduledAt.toISOString()} (${subscribers.length} destinataires)`)
+
+            return {
+                success: true,
+                campaignId,
+                queueId,
+                status: 'scheduled',
+                scheduledAt: resolvedScheduledAt,
+                plannedRecipients: subscribers.length,
             }
         }
 
-        // 3. IF DRAFT -> JUST RETURN SUCCESS
+        // ─── 3. Brouillon ──────────────────────────────────────────────────────
         return {
             success: true,
             campaignId,

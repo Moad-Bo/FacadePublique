@@ -3,6 +3,7 @@ import { emailQueue } from "../../drizzle/src/db/schema";
 import { eq, and, sql, lte, or, lt } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { sendEmail } from "./email";
+import { sendBatchCampaign } from "./email";
 import { addDays, addWeeks, addMonths, setHours, setMinutes, setSeconds, format } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 
@@ -97,10 +98,10 @@ function calculateNextRun(current: Date, recurrence: string, value?: string, tz:
  * Background worker logic: processes pending emails.
  */
 export async function processQueue() {
-    // 1. Select pending emails that are not currently locked
-    // or were locked more than 5 minutes ago (zombie jobs)
     const now = new Date();
-    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60000);
+    // ── Phase 3 : Circuit Breaker — timeout zombie porté à 10 minutes ────────
+    // Un job est considéré zombie si lockedAt > 10 min (crash serveur probable)
+    const tenMinutesAgo = new Date(now.getTime() - 10 * 60000);
 
     // 0. Purge old email logs (older than 7 days)
     try {
@@ -118,7 +119,8 @@ export async function processQueue() {
                 lte(emailQueue.scheduledAt, now),
                 or(
                     eq(emailQueue.status, "pending"),
-                    and(eq(emailQueue.status, "locked"), lte(emailQueue.lockedAt, fiveMinutesAgo))
+                    // Phase 3 : Circuit Breaker — récupère les zombies (> 10 min)
+                    and(eq(emailQueue.status, "locked"), lte(emailQueue.lockedAt, tenMinutesAgo))
                 ),
                 lt(emailQueue.retryCount, 3)
             )
@@ -132,8 +134,74 @@ export async function processQueue() {
                 .set({ status: "locked", lockedAt: new Date(), updatedAt: new Date() })
                 .where(eq(emailQueue.id, item.id));
 
-            console.log(`[Scheduler] Processing email ${item.id} to ${item.recipient} (Retry: ${item.retryCount})`);
+            console.log(`[Scheduler] Processing job ${item.id} — type: ${item.type} — to: ${item.recipient} (Retry: ${item.retryCount})`);
 
+            // ── Branche BATCH CAMPAGNE ────────────────────────────────────────
+            if (item.type === 'campaign_batch' && item.recipient === '__batch__') {
+
+                // ⚡ CIRCUIT BREAKER IDEMPOTENCE — Anti-double-envoi
+                // Si mailgunMessageId est déjà présent, Mailgun a déjà accepté
+                // la requête avant le crash. On ne renvoie PAS.
+                if ((item as any).mailgunMessageId) {
+                    console.warn(`[Scheduler] ⚡ Idempotence: batch ${item.id} déjà envoyé à Mailgun (${(item as any).mailgunMessageId}). Skip envoi.`);
+                    await db.update(emailQueue)
+                        .set({ status: 'sent', updatedAt: new Date(), lockedAt: null })
+                        .where(eq(emailQueue.id, item.id));
+                    if (item.template) {
+                        const { campaign } = await import("../../drizzle/src/db/schema");
+                        await db.update(campaign)
+                            .set({ sentAt: new Date(), status: 'sent' })
+                            .where(eq(campaign.id, item.template));
+                    }
+                    continue;
+                }
+
+                // Récupère l'audience selon l'opt-in requis par le contexte de campagne
+                const { audience } = await import("../../drizzle/src/db/schema");
+                const { CAMPAIGN_CONTEXT_CONFIG } = await import('./email-router');
+
+                // Sélection du champ opt-in selon le contexte — filtre précis et conforme au consentement RGPD
+                const conf = CAMPAIGN_CONTEXT_CONFIG[item.fromContext || 'campaign_newsletter'];
+                const optInField = (conf?.optInField || 'optInNewsletter') as 'optInNewsletter' | 'optInMarketing';
+                const subscribers = await db.select().from(audience)
+                    .where(eq(audience[optInField], true));
+
+
+                const batchRes = await sendBatchCampaign({
+                    context:      item.fromContext || 'campaign_newsletter',
+                    subject:      item.subject,
+                    htmlTemplate: item.html || '',
+                    subscribers,
+                    campaignId:   item.template || undefined,
+                });
+
+                if (batchRes.success) {
+                    // Persistance du mailgunMessageId AVANT de marquer sent
+                    // (garantit l'idempotence si crash entre ces deux étapes)
+                    await db.update(emailQueue)
+                        .set({
+                            status: 'sent',
+                            updatedAt: new Date(),
+                            lockedAt: null,
+                            mailgunMessageId: batchRes.mailgunMessageId || null
+                        } as any)
+                        .where(eq(emailQueue.id, item.id));
+
+                    // Mise à jour de la campagne parente
+                    if (item.template) {
+                        const { campaign } = await import("../../drizzle/src/db/schema");
+                        await db.update(campaign)
+                            .set({ sentAt: new Date(), status: 'sent', totalRecipients: batchRes.sent })
+                            .where(eq(campaign.id, item.template));
+                    }
+                    console.info(`[Scheduler] ✅ Batch campagne ${item.template}: ${batchRes.sent} envoi(s) en ${batchRes.chunks} chunk(s).`);
+                } else {
+                    throw new Error(batchRes.error || 'Batch send failed');
+                }
+                continue;
+            }
+
+            // ── Branche EMAIL INDIVIDUEL (comportement existant) ──────────────
             // 3. Optional: Pre-send check for system emails
             if (item.type === "system") {
                 const isValid = await checkSystemCondition(item);

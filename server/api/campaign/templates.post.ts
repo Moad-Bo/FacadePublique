@@ -14,6 +14,8 @@ const templateSchema = z.object({
     content: z.string().min(1, 'Le contenu est requis'),
     icon: z.string().optional(),
     description: z.string().optional(),
+    layoutId: z.string().optional().default('campaign'),
+    category: z.string().optional(),
 })
 
 export default defineEventHandler(async (event) => {
@@ -21,7 +23,7 @@ export default defineEventHandler(async (event) => {
     
     try {
         const body = await validateBody(event, templateSchema)
-        const { id, name, subject, content, icon, description } = body
+        const { id, name, subject, content, icon, description, layoutId } = body
 
         if (id) {
             // Update
@@ -32,6 +34,7 @@ export default defineEventHandler(async (event) => {
                     content, 
                     icon: icon || 'i-lucide:mail', 
                     description,
+                    layoutId: layoutId || 'campaign',
                     updatedAt: new Date()
                 })
                 .where(eq(campaignTemplate.id, id))
@@ -47,6 +50,7 @@ export default defineEventHandler(async (event) => {
                 content,
                 icon: icon || 'i-lucide:mail',
                 description,
+                layoutId: layoutId || 'campaign',
                 createdAt: new Date(),
                 updatedAt: new Date()
             })

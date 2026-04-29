@@ -3,6 +3,10 @@ import path from 'node:path'
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2024-07-15',
+  site: {
+    url: 'https://facadepublique.com',
+    name: 'Facade Publique'
+  },
 
   runtimeConfig: {
     // Clés serveur uniquement (jamais exposées au client)
@@ -21,30 +25,39 @@ export default defineNuxtConfig({
     mailgunApiKey: process.env.MAILGUN_API_KEY,
     mailgunWebhookSigningKey: process.env.MAILGUN_WEBHOOK_SIGNING_KEY,
     // Adresses expéditeurs complètes — source de vérité depuis .env
-    // Format: "user@domaine" — le domaine est extrait pour le routing Mailgun
+    mailEmailSupport: process.env.MAIL_DOMAIN_SUPPORT || 'support@support.techkne.com',
+    mailEmailContact: process.env.MAIL_DOMAIN_CONTACT || 'contact@support.techkne.com',
+    mailEmailMod: process.env.MAIL_DOMAIN_MOD || 'moderation@support.techkne.com',
+
+    // Domaines pour Mailgun (extraits des emails)
     mailDomainSystem: (process.env.MAIL_DOMAIN_SYSTEM || 'system@support.techkne.com').split('@').pop(),
     mailDomainMarketing: (process.env.MAIL_DOMAIN_MARKETING || 'marketing@support.techkne.com').split('@').pop(),
-    mailDomainSupport: (process.env.MAIL_DOMAIN_SUPPORT || 'contact@support.techkne.com').split('@').pop(),
+    mailDomainSupport: (process.env.MAIL_DOMAIN_SUPPORT || 'support@support.techkne.com').split('@').pop(),
+
+    // Adresses complètes par type de campagne (OUTBOUND ONLY — isolation de réputation)
+    mailDomainCampaignNewsletter: process.env.MAIL_DOMAIN_CAMPAIGN_NEWSLETTER || 'newsletter@support.techkne.com',
+    mailDomainCampaignChangelog:  process.env.MAIL_DOMAIN_CAMPAIGN_CHANGELOG  || 'changelog@support.techkne.com',
+    mailDomainCampaignPromo:      process.env.MAIL_DOMAIN_CAMPAIGN_PROMO      || 'marketing@support.techkne.com',
+
     smtpHost: process.env.SMTP_HOST || 'smtp.eu.mailgun.org',
     smtpPort: parseInt(process.env.SMTP_PORT || '587'),
     smtpUser: process.env.SMTP_USER,
     smtpPass: process.env.SMTP_PASS,
+
     /**
      * MAILGUN_SENDER_CONTEXTS — Alias expéditeurs configurables
-     * Alignés avec MAIL_DOMAIN_SYSTEM, MAIL_DOMAIN_MARKETING, MAIL_DOMAIN_SUPPORT
-     * Format: "Label:adresse@domaine" séparés par des virgules
-     * 
-     * Contextes disponibles (correspondances avec emailRouter):
-     *   Support   → MAIL_DOMAIN_SUPPORT  (EmailContext.WEBMAILER)  → SMTP
-     *   Newsletter→ MAIL_DOMAIN_MARKETING(EmailContext.MARKETING_BATCH) → API
-     *   Système   → MAIL_DOMAIN_SYSTEM   (EmailContext.SYSTEM)     → API
+     * Alignés avec MAIL_DOMAIN_SUPPORT, MAIL_DOMAIN_CONTACT, MAIL_DOMAIN_MOD
      */
     mailgunSenderContexts: process.env.MAILGUN_SENDER_CONTEXTS
-      // Fallback auto-construit depuis les 3 variables de domaine officielles
       || [
-        `Support:${process.env.MAIL_DOMAIN_SUPPORT || 'contact@support.techkne.com'}`,
-        `Newsletter:${process.env.MAIL_DOMAIN_MARKETING || 'marketing@support.techkne.com'}`,
+        `Support:${process.env.MAIL_DOMAIN_SUPPORT || 'support@support.techkne.com'}`,
+        `Contact:${process.env.MAIL_DOMAIN_CONTACT || 'contact@support.techkne.com'}`,
+        `Moderation:${process.env.MAIL_DOMAIN_MOD || 'moderation@support.techkne.com'}`,
         `Système:${process.env.MAIL_DOMAIN_SYSTEM || 'system@support.techkne.com'}`,
+        // Campagnes — alias dédiés par type
+        `Newsletter:${process.env.MAIL_DOMAIN_CAMPAIGN_NEWSLETTER || 'newsletter@support.techkne.com'}`,
+        `Changelog:${process.env.MAIL_DOMAIN_CAMPAIGN_CHANGELOG   || 'changelog@support.techkne.com'}`,
+        `Promotionnel:${process.env.MAIL_DOMAIN_CAMPAIGN_PROMO    || 'marketing@support.techkne.com'}`,
       ].join(','),
     // Clés publiques (accessibles depuis le client via useRuntimeConfig().public)
     public: {
@@ -199,7 +212,7 @@ export default defineNuxtConfig({
   telemetry: false,
 
   nitro: {
-    preset: 'vercel',
+    preset: 'node-server',
     // On mocke secure-exec pour éviter les erreurs de build sans l'installer (sécurité)
     alias: {
       'secure-exec': path.resolve(__dirname, 'server/utils/mock-secure-exec.ts')

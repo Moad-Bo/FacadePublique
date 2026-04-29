@@ -1,17 +1,18 @@
-import { ref, computed } from 'vue'
+import { ref, watch, onMounted } from 'vue'
+import type { CampaignTypeId } from './useCampaigns'
 import { useSessionStorage } from '@vueuse/core'
 
 export const useComposer = () => {
   const notify = useNotify()
 
-  // ─── STATE ──────────────────────────────────────────────────────────────────
+  // ─── ÉTATS PERSISTANTS (Légers) ─────────────────────────────────────────────
   const isComposerOpen = useSessionStorage('composer-open', false)
-  const composerMode = useSessionStorage<'new_message' | 'layout' | 'automation' | 'newsletter' | 'import_export' | 'blacklist_mgmt'>('composer-mode', 'new_message')
+  const composerMode = useSessionStorage<'new_message' | 'layout' | 'automation' | 'newsletter' | 'import_export' | 'blacklist_mgmt' | 'campagne' | 'modele'>('composer-mode', 'new_message')
   const composerStep = useSessionStorage('composer-step', 1)
-  const isComposerLoading = useState('composer-loading', () => false)
   const isReplyMode = useSessionStorage('composer-is-reply', false)
   
-  // EML Import State
+  // ─── ÉTATS EN MÉMOIRE (Potentiellement lourds) ──────────────────────────────
+  const isComposerLoading = useState('composer-loading', () => false)
   const pendingMails = useState<any[]>('composer-pending-mails', () => [])
 
   // Universal Form
@@ -21,7 +22,7 @@ export const useComposer = () => {
     cc: '',
     bcc: '',
     subject: '',
-    body: '',                  // HTML or Plain text
+    body: '',                  // HTML or Plain text (NON PERSISTÉ DANS STORAGE)
     name: '',                  // For Layouts / Campaigns
     description: '',           // For Layouts
     category: 'contact',       // For Layouts
@@ -30,14 +31,37 @@ export const useComposer = () => {
     templateId: '',            // Base Model
     attachments: [] as any[],
     showCcBcc: false,
-    
-    // Campaign / Automation specifics
     scheduledAt: '',
     recurrence: 'none' as 'none' | 'daily' | 'weekly' | 'monthly',
     recurrenceValue: '',
     timezone: 'Europe/Paris',
-    fromContext: 'Support'
+    fromContext: 'Newsletter',
+    campaignType: 'campaign_newsletter' as CampaignTypeId,
   }))
+
+  // ─── LOGIQUE DE PERSISTANCE SÉLECTIVE ───────────────────────────────────────
+  // On ne persiste que les métadonnées pour éviter les lags de sérialisation JSON
+  // sur de gros corps de messages (plusieurs Mo).
+  if (import.meta.client) {
+    onMounted(() => {
+      const saved = sessionStorage.getItem('composer-form-meta')
+      if (saved) {
+        try {
+          const meta = JSON.parse(saved)
+          // On fusionne les métadonnées en préservant le body s'il existe déjà
+          Object.assign(composerForm.value, { ...meta, body: composerForm.value.body })
+        } catch (e) {
+          console.warn('[Composer] Échec de restauration des métadonnées')
+        }
+      }
+    })
+
+    // Watcher pour sauvegarder les métadonnées (debouncé implicitement par la boucle d'event)
+    watch(composerForm, (val) => {
+      const { body, ...meta } = val
+      sessionStorage.setItem('composer-form-meta', JSON.stringify(meta))
+    }, { deep: true })
+  }
 
   const resetComposer = () => {
     composerForm.value = {
@@ -45,17 +69,19 @@ export const useComposer = () => {
       name: '', description: '', category: 'contact',
       layoutId: 'inbox', contentLayoutId: '', templateId: '',
       attachments: [], showCcBcc: false,
-      scheduledAt: '', recurrence: 'none', recurrenceValue: '', 
+      scheduledAt: '', recurrence: 'none', recurrenceValue: '',
       timezone: 'Europe/Paris',
-      fromContext: 'Support'
+      fromContext: 'Newsletter',
+      campaignType: 'campaign_newsletter' as CampaignTypeId,
     }
     composerStep.value = 1
     isReplyMode.value = false
     pendingMails.value = []
+    if (import.meta.client) sessionStorage.removeItem('composer-form-meta')
   }
 
   const openComposer = (opts: { 
-    mode: 'new_message' | 'layout' | 'automation' | 'newsletter' | 'import_export' | 'blacklist_mgmt',
+    mode: 'new_message' | 'layout' | 'automation' | 'newsletter' | 'import_export' | 'blacklist_mgmt' | 'campagne' | 'modele',
     isCreation?: boolean,
     id?: string,
     to?: string,
@@ -78,11 +104,9 @@ export const useComposer = () => {
     composerMode.value = opts.mode
     isReplyMode.value = opts.isReply || false
     
-    // If it's a creation, usually start at step 1. 
-    // If editing existing, go to editor (step 2 or 3)
     composerStep.value = (opts.isCreation) ? 1 : 2
 
-    // Fill form
+    // Remplissage du formulaire
     if (opts.id) composerForm.value.id = opts.id
     if (opts.to) composerForm.value.to = opts.to
     if (opts.cc) composerForm.value.cc = opts.cc
@@ -141,7 +165,7 @@ export const useComposer = () => {
         method: 'POST',
         body: {
           ...composerForm.value,
-          content: composerForm.value.body, // S'assurer que 'content' est envoyé (attendu par Zod)
+          content: composerForm.value.body,
           action
         }
       })
@@ -171,7 +195,7 @@ export const useComposer = () => {
           body: composerForm.value.body,
           layoutId: composerForm.value.layoutId,
           attachments: composerForm.value.attachments.map(a => a.id),
-          toAccount: 'contact' // Valeur par défaut attendue par le backend
+          toAccount: 'contact'
         }
       })
       notify.success('Brouillon sauvegardé')
@@ -185,7 +209,6 @@ export const useComposer = () => {
   const uploadAttachment = async (file: File) => {
     isComposerLoading.value = true
     try {
-      // 1. Obtenir le contrat d'upload direct (Presigned POST)
       const { post, key, publicUrl } = await $fetch<any>('/api/assets/upload-contract', {
         query: {
           filename: file.name,
@@ -194,22 +217,19 @@ export const useComposer = () => {
         }
       })
 
-      // 2. Préparer le FormData pour S3
       const formData = new FormData()
       Object.entries(post.fields).forEach(([k, v]) => {
         formData.append(k, v as string)
       })
-      formData.append('file', file) // Le fichier doit être le dernier champ
+      formData.append('file', file)
 
-      // 3. Upload direct vers S3
       await $fetch(post.url, {
         method: 'POST',
         body: formData
       })
 
-      // 4. Ajouter à la liste des pièces jointes
       composerForm.value.attachments.push({
-        id: key, // Utiliser la clé S3 comme ID unique
+        id: key,
         filename: file.name,
         contentType: file.type,
         size: file.size,

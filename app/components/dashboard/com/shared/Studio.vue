@@ -4,6 +4,7 @@ const { composerForm, composerStep, isComposerLoading, closeComposer, saveCampai
 const { currentModeConfig } = useStudioConfig()
 const notify = useNotify()
 const config = useRuntimeConfig()
+const router = useRouter()
 
 // --- SENDER CONTEXTS ---
 // mailSenderLabels est une liste de labels (ex: "Support,Newsletter,Système")
@@ -44,6 +45,35 @@ const handleSave = async () => {
   if (mode === 'Design Studio') {
     const res = await saveLayout()
     if (res) closeComposer()
+  } else if (mode === 'Campagnes Studio') {
+    // Nouvelle campagne via stepper campagne/
+    const res = await saveCampaign('publish')
+    if (res) closeComposer()
+  } else if (mode === 'Modèles Studio') {
+    // Nouveau modèle via stepper modele/
+    try {
+      isComposerLoading.value = true
+      const res = await $fetch<any>('/api/campaign/templates', {
+        method: 'POST',
+        body: {
+          id: composerForm.value.id || undefined,
+          name: composerForm.value.name,
+          description: composerForm.value.description,
+          subject: composerForm.value.subject,
+          content: composerForm.value.body,
+          icon: (composerForm.value as any).icon || 'i-lucide:mail',
+          layoutId: composerForm.value.layoutId || 'campaign',
+        }
+      })
+      if (res.success) {
+        notify.success('Modèle enregistré', `"${composerForm.value.name}" a été créé.`)
+        closeComposer()
+      }
+    } catch (e: any) {
+      notify.error('Erreur modèle', e.message)
+    } finally {
+      isComposerLoading.value = false
+    }
   } else if (mode === 'Campagnes' || mode === 'Webmailing') {
     const res = await saveCampaign('publish')
     if (res) closeComposer()
@@ -54,6 +84,8 @@ const handleSave = async () => {
 
 const getActionLabel = computed(() => {
   const mode = currentModeConfig.value.label
+  if (mode === 'Campagnes Studio') return 'Lancer la Campagne'
+  if (mode === 'Modèles Studio') return 'Enregistrer le Modèle'
   if (mode === 'Campagnes') return 'Lancer la Campagne'
   if (mode === 'Design Studio') return 'Enregistrer Design'
   if (mode === 'Configuration') return 'Appliquer'
@@ -63,6 +95,11 @@ const getActionLabel = computed(() => {
 const getNextLabel = computed(() => {
   const mode = currentModeConfig.value.label
   if (mode === 'Configuration' && composerStep.value === 1) return 'Gestion Contacts'
+  if (mode === 'Campagnes Studio') {
+    if (composerStep.value === 1) return 'Composer'
+    if (composerStep.value === 2) return 'Planifier'
+  }
+  if (mode === 'Modèles Studio' && composerStep.value === 1) return 'Contenu'
   return 'Continuer'
 })
 </script>

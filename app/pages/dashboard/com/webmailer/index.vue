@@ -17,10 +17,11 @@ const isMobile = useBreakpoints(breakpointsTailwind).smaller('lg')
 // Chaque entrée correspond à un alias Mailgun inbound.
 // `id` doit correspondre au champ `toAccount` dans la table mailbox.
 const accounts = ref([
-  { id: 'contact',    label: 'contact@support.techkne.com', icon: 'i-lucide:mail',         color: 'primary'  },
-  { id: 'mod-forum',  label: 'mod-forum@mail.techkne.fr',   icon: 'i-lucide:shield-check',  color: 'warning'  },
+  { id: 'support',    label: 'support@support.techkne.com', icon: 'i-lucide:help-circle',   color: 'info'     },
+  { id: 'contact',    label: 'contact@support.techkne.com', icon: 'i-lucide:mail',          color: 'primary'  },
+  { id: 'moderation', label: 'moderation@support.techkne.com', icon: 'i-lucide:shield-check', color: 'warning'  },
 ])
-const activeAccount = ref(accounts.value[0])
+const activeAccount = ref(accounts.value[1]) // Default to contact (index 1)
 
 // ─── SIDEBAR NAVIGATION ────────────────────────────────────────────────────
 const sidebarExpanded = useSessionStorage('webmailer-sidebar-expanded', true)

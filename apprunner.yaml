@@ -1,0 +1,50 @@
+version: 1.0
+runtime: nodejs22
+
+build:
+  commands:
+    pre-build:
+      - echo "Installing dependencies..."
+      - npm ci
+    build:
+      - echo "Building Nuxt application (node-server preset)..."
+      - npm run build
+    post-build:
+      - echo "Build complete. Output in .output/"
+
+run:
+  # Commande de démarrage du serveur Nitro standalone
+  command: node .output/server/index.mjs
+
+  network:
+    port: 3000
+    env: PORT
+
+  # Intervalle de health check pour App Runner
+  # L'endpoint /api/health doit retourner HTTP 200
+  health-check:
+    path: /api/health
+    interval: 10
+    timeout: 5
+    healthy-threshold: 1
+    unhealthy-threshold: 5
+
+  env:
+    - name: NODE_ENV
+      value: production
+    - name: TZ
+      value: Europe/Paris
+    # Les variables sensibles (MAILGUN_API_KEY, TIDB_PASSWORD, etc.)
+    # sont à configurer dans la console AWS App Runner > Environment variables
+    # ou via AWS Secrets Manager pour les secrets critiques.
+    #
+    # Variables à ajouter manuellement dans App Runner :
+    #   BETTER_AUTH_SECRET
+    #   MAILGUN_API_KEY
+    #   MAILGUN_WEBHOOK_SIGNING_KEY
+    #   TIDB_HOST / TIDB_PORT / TIDB_USER / TIDB_PASSWORD / TIDB_DATABASE
+    #   AWS_REGION / AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+    #   AWS_S3_BUCKET_NAME / CLOUDFRONT_DOMAIN / CLOUDFRONT_KEY_PAIR_ID
+    #   MAIL_DOMAIN_SUPPORT / MAIL_DOMAIN_CONTACT / MAIL_DOMAIN_MOD
+    #   MAIL_DOMAIN_CAMPAIGN_NEWSLETTER / MAIL_DOMAIN_CAMPAIGN_CHANGELOG / MAIL_DOMAIN_CAMPAIGN_PROMO
+    #   SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS

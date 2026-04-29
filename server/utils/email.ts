@@ -8,7 +8,7 @@ import { emailLog, settings } from "../../drizzle/src/db/schema";
 import { randomUUID } from "crypto";
 import { sql, gt } from "drizzle-orm";
 import { getFromS3 } from "./r2"; // Gardé pour compatibilité de nommage
-import { emailRouter, EmailContext } from "./email-router";
+import { emailRouter, EmailContext, CAMPAIGN_CONTEXT_CONFIG } from "./email-router";
 import { useRuntimeConfig } from "#imports";
 
 const config = useRuntimeConfig();
@@ -158,13 +158,16 @@ export const sendEmail = async ({
     // 1. ROUTING & OPT-IN CHECK
     const contextMap: Record<string, EmailContext> = {
       system: EmailContext.SYSTEM,
-      campaign: EmailContext.MARKETING_BATCH,
-      newsletter: EmailContext.MARKETING_BATCH, // kept for legacy
+      campaign: EmailContext.CAMPAIGN_NEWSLETTER, // Mapping par défaut pour campagne générique
+      newsletter: EmailContext.CAMPAIGN_NEWSLETTER,
       notification: EmailContext.COMMUNITY_TX,
-      'mod-forum': EmailContext.COMMUNITY_TX,
+      'mod-forum': EmailContext.MODERATION,
+      moderation: EmailContext.MODERATION,
       staff: EmailContext.WEBMAILER,
-      marketing: EmailContext.MARKETING_BATCH,
-      contact: EmailContext.BLOG_TX
+      support: EmailContext.WEBMAILER,
+      marketing: EmailContext.CAMPAIGN_PROMO,
+      contact: EmailContext.BLOG_TX,
+      changelog: EmailContext.CAMPAIGN_CHANGELOG
     };
 
     const routing = await emailRouter.getRouting(contextMap[type] || EmailContext.SYSTEM, recipient);
@@ -203,7 +206,7 @@ export const sendEmail = async ({
             type: type as string,
             logId, // For tracking
             alias: fromDisplayName,
-            campaignId: campaignId || (((type as string) === 'newsletter' || (type as string) === 'campaign') ? template : undefined) // Use template as fallback campaignId for legacy
+            campaignId: campaignId || (((type as string) === 'newsletter' || (type as string) === 'campaign') ? template : undefined)
         }) : '';
 
         // 3. Validate Deliverability (Stop-Gate / Advice)
@@ -300,7 +303,7 @@ export const sendEmail = async ({
             const baseUrl = config.public.authBaseUrl || 'http://localhost:3000';
             const unsubToken = generateUnsubscribeToken(recipient);
             // URL utilisée pour le lien footer (GET classique)
-            const unsubUrl = `${baseUrl}/api/webhooks/mailgun/unsubscribe?email=${encodeURIComponent(recipient)}&token=${unsubToken}`;
+            const unsubUrl = `${baseUrl}/api/campaign/unsubscribe?email=${encodeURIComponent(recipient)}&token=${unsubToken}`;
             // URL utilisée pour le One-Click POST (RFC 8058 — Gmail/Outlook natif)
             const unsubPostUrl = `${baseUrl}/api/webhooks/mailgun/unsubscribe`;
             composerOptions.headers = {
@@ -366,3 +369,114 @@ export const sendEmail = async ({
         return { success: false, error: error.message || "Email delivery failed" };
     }
 };
+
+// ─── Batch Campaign Send ──────────────────────────────────────────────────────
+
+/** Taille max d'un batch Mailgun (limite API officielle) */
+const MAILGUN_BATCH_SIZE = 1000;
+
+/**
+ * Envoie une campagne en mode batch via Mailgun Recipient Variables.
+ *
+ * Avantages vs boucle for :
+ *  - 1 seule requête HTTP par chunk de 1000 destinataires
+ *  - Le rendu HTML par destinataire est délégué à Mailgun (%recipient.name%)
+ *  - Aucune adresse email codée en dur — tout vient du runtimeConfig (.env)
+ *  - Filtrage opt-in intégré avant l'envoi
+ *
+ * @param context  - Un des EmailContext.CAMPAIGN_* (newsletter, changelog, promo)
+ * @param subject  - Sujet de l'email
+ * @param htmlTemplate - HTML avec placeholders Mailgun (%recipient.name%, %recipient.token%)
+ * @param subscribers  - Liste des abonnés (email + nom optionnel + champs opt-in)
+ * @param campaignId   - ID de campagne pour le tracking (optionnel)
+ */
+export async function sendBatchCampaign(options: {
+  context: string;
+  subject: string;
+  htmlTemplate: string;
+  subscribers: { email: string; name?: string; optInNewsletter?: boolean; optInMarketing?: boolean }[];
+  campaignId?: string;
+}): Promise<{ success: boolean; sent: number; chunks: number; mailgunMessageId?: string; error?: string }> {
+  const { context, subject, htmlTemplate, subscribers, campaignId } = options;
+  const rConfig = useRuntimeConfig();
+
+  if (!mg) {
+    return { success: false, sent: 0, chunks: 0, error: 'Mailgun non configuré.' };
+  }
+
+  // 1. Résolution de la configuration depuis la table agnostique
+  const conf = CAMPAIGN_CONTEXT_CONFIG[context];
+  if (!conf) {
+    return { success: false, sent: 0, chunks: 0, error: `Contexte de campagne inconnu: ${context}` };
+  }
+
+  const fromAddress = (rConfig as any)[conf.envKey] as string | undefined;
+  if (!fromAddress) {
+    return { success: false, sent: 0, chunks: 0, error: `Variable .env manquante pour la clé: ${conf.envKey}` };
+  }
+
+  const domain = fromAddress.split('@').pop()!;
+  const from   = `${conf.alias} <${fromAddress}>`;
+
+  // 2. Filtrage opt-in — ne jamais envoyer sans consentement
+  const eligible = subscribers.filter(sub => sub[conf.optInField] === true);
+
+  if (eligible.length === 0) {
+    console.warn(`[BATCH] Aucun abonné éligible pour le contexte "${context}" (opt-in: ${conf.optInField})`);
+    return { success: true, sent: 0, chunks: 0 };
+  }
+
+  const { generateUnsubscribeToken } = await import('./email-builder');
+  const baseUrl = rConfig.public.authBaseUrl || 'http://localhost:3000';
+
+  // 3. Chunking automatique (limite API Mailgun = 1000 par requête)
+  const chunks: typeof eligible[] = [];
+  for (let i = 0; i < eligible.length; i += MAILGUN_BATCH_SIZE) {
+    chunks.push(eligible.slice(i, i + MAILGUN_BATCH_SIZE));
+  }
+
+  let totalSent = 0;
+  let firstMailgunMessageId: string | undefined;
+
+  for (const chunk of chunks) {
+    // Construction des recipient-variables : 1 objet JSON par destinataire
+    const recipientVariables: Record<string, object> = {};
+    for (const sub of chunk) {
+      const unsubToken = generateUnsubscribeToken(sub.email);
+      recipientVariables[sub.email] = {
+        name:        sub.name || 'Utilisateur',
+        token:       unsubToken,
+        alias:       conf.alias,
+        unsub_link:  `${baseUrl}/api/webhooks/mailgun/unsubscribe?email=${encodeURIComponent(sub.email)}&token=${unsubToken}`,
+      };
+    }
+
+    try {
+      const result = await mg.messages.create(domain, {
+        from,
+        to:      Object.keys(recipientVariables),
+        subject,
+        html:    htmlTemplate,  // Mailgun remplace %recipient.name%, %recipient.token%, etc.
+        'recipient-variables': JSON.stringify(recipientVariables),
+        // Headers conformes RFC 8058 (One-Click unsubscribe Gmail/Outlook)
+        'h:List-Unsubscribe':      `<${baseUrl}/api/webhooks/mailgun/unsubscribe>`,
+        'h:List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        'h:X-Mailgun-Tag':         campaignId || context,
+      }) as any;
+
+      // Capture du Message-ID Mailgun pour l'idempotence (anti-double-envoi au retry)
+      const mailgunId = result?.id?.replace(/[<>]/g, '') || '';
+      if (mailgunId && !firstMailgunMessageId) {
+        firstMailgunMessageId = mailgunId;
+      }
+
+      totalSent += chunk.length;
+      console.info(`[BATCH] ✅ Chunk envoyé: ${chunk.length} destinataires via ${fromAddress} (contexte: ${context}) | MG-ID: ${mailgunId}`);
+    } catch (chunkErr: any) {
+      console.error(`[BATCH] ❌ Échec chunk (${chunk.length} destinataires):`, chunkErr.message);
+      // On continue avec les autres chunks même si un échoue
+    }
+  }
+
+  return { success: true, sent: totalSent, chunks: chunks.length, mailgunMessageId: firstMailgunMessageId };
+}

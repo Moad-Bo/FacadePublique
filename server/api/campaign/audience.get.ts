@@ -1,7 +1,7 @@
 import { defineEventHandler } from 'h3'
 import { db } from '../../utils/db'
 import { audience } from '../../../drizzle/src/db/schema'
-import { desc, eq } from 'drizzle-orm'
+import { desc } from 'drizzle-orm'
 import { requireUserSession } from '../../utils/auth'
 
 export default defineEventHandler(async (event) => {
@@ -9,25 +9,39 @@ export default defineEventHandler(async (event) => {
     await requireUserSession(event, { permission: 'manage_campaign' })
 
     try {
+        // Retourne TOUS les abonnés avec tous les champs opt-in exposés.
+        // Le filtrage par contexte de campagne est géré côté frontend
+        // pour permettre l'affichage granulaire (newsletter / changelog / promo).
         const subscribers = await db.select()
             .from(audience)
-            .where(eq(audience.optInMarketing, true))
             .orderBy(desc(audience.createdAt))
             .catch((e) => {
-                console.warn('[API] Newsletter subscribers fetch failed:', e)
+                console.warn('[API] Audience fetch failed:', e)
                 return []
             })
 
         return subscribers.map(s => ({
-            ...s,
             id: s.id,
             email: s.email,
-            subscribedAt: s.createdAt,
-            status: s.unsubscribedAt ? 'unsubscribed' : 'subscribed',
+            userId: s.userId,
+            // Opt-ins granulaires — tous exposés
+            optInNewsletter: s.optInNewsletter,
+            optInMarketing: s.optInMarketing,
+            optInChangelog: s.optInChangelog,
+            optInForum: s.optInForum,
+            optInMentions: s.optInMentions,
+            optInReplies: s.optInReplies,
+            source: s.source,
+            unsubscribedAt: s.unsubscribedAt,
+            createdAt: s.createdAt,
+            updatedAt: s.updatedAt,
+            // Helpers calculés
+            isActive: !s.unsubscribedAt,
             avatar: { src: `https://i.pravatar.cc/128?u=${s.id}` }
         }))
     } catch (e) {
-        console.error('[API] Subscribers Error:', e)
+        console.error('[API] Audience Error:', e)
         return []
     }
 })
+

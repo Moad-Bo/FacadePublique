@@ -231,6 +231,7 @@ export const emailQueue = mysqlTable("email_queue", {
     layoutId: varchar("layout_id", { length: 36 }),
     timezone: varchar("timezone", { length: 50 }).default("Europe/Paris"),
     errorMessage: text("error_message"),
+    mailgunMessageId: varchar("mailgun_message_id", { length: 255 }), // Idempotence anti-double-envoi
     retryCount: int("retry_count").default(0),
     lockedAt: timestamp("locked_at"),
     createdAt: timestamp("createdAt").defaultNow(),

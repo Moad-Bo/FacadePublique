@@ -18,25 +18,17 @@
  */
 
 import { defineEventHandler, readMultipartFormData, readBody, getHeader, createError } from 'h3';
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
 import { db } from '../../../utils/db';
 import { mailbox, mailboxAttachment } from '../../../../drizzle/src/db/schema';
-import { randomUUID } from 'crypto';
 import { awsAssetsService } from '../../../utils/aws-assets';
 import { notify } from '../../../utils/notify';
+import { useRuntimeConfig } from '#imports';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
 /** Âge maximum d'un webhook (anti-replay attack) : 5 minutes */
 const MAX_WEBHOOK_AGE_SECONDS = 5 * 60;
-
-/**
- * Adresses de destination supportées par le Webmailer.
- * Utilisé pour mapper le champ 'recipient' Mailgun vers toAccount.
- */
-const INBOUND_RECIPIENT_MAP: Record<string, string> = {
-  'contact@support.techkne.com': 'contact',
-};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -209,10 +201,17 @@ export default defineEventHandler(async (event) => {
   const fromEmail  = fromMatch[2]?.trim() || sender;
 
   // ── 7. Mapping de la boîte de destination ──────────────────────────────────
-  const recipientList = recipient.split(',').map(r => r.trim());
+  const config = useRuntimeConfig();
+  const INBOUND_MAP: Record<string, string> = {
+    [config.mailEmailSupport?.toLowerCase()]: 'support',
+    [config.mailEmailContact?.toLowerCase()]: 'contact',
+    [config.mailEmailMod?.toLowerCase()]: 'moderation',
+  };
+
+  const recipientList = recipient.split(',').map(r => r.trim().toLowerCase());
   const toAccount = recipientList.reduce<string | null>((found, r) => {
     if (found) return found;
-    return INBOUND_RECIPIENT_MAP[r.toLowerCase()] ?? null;
+    return INBOUND_MAP[r] ?? null;
   }, null) ?? 'contact';
 
   // ── 8. LOG structuré ───────────────────────────────────────────────────────

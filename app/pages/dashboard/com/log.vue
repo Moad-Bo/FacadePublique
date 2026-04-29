@@ -29,6 +29,61 @@ const contextMode = ref<'all' | 'webmailer' | 'campaign'>('all');
 const isMetricSidebarCollapsed = ref(false);
 const isExportModalOpen = ref(false);
 
+// --- MULTI-SELECTION & ACTIONS ---
+const selectedItems = ref<string[]>([]);
+const toggleSelection = (id: string) => {
+  if (selectedItems.value.includes(id)) {
+    selectedItems.value = selectedItems.value.filter(i => i !== id);
+  } else {
+    selectedItems.value.push(id);
+  }
+};
+const selectAll = (list: any[]) => {
+  if (selectedItems.value.length === list.length && list.length > 0) {
+    selectedItems.value = [];
+  } else {
+    selectedItems.value = list.map(i => i.id);
+  }
+};
+
+const downloadCSV = (headers: string[], rows: any[][], filename: string) => {
+    const csv = [headers, ...rows].map(r => r.join(';')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${filename}-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    notify.success('Export de sauvegarde généré');
+};
+
+const cancelSelectedQueue = async () => {
+  if (selectedItems.value.length === 0) return;
+  if (!confirm(`Annuler ${selectedItems.value.length} envois ? Un export de sauvegarde sera généré.`)) return;
+
+  const toDelete = (queue.value || []).filter((c: any) => selectedItems.value.includes(c.id));
+  const headers = ['ID', 'Destinataire', 'Sujet', 'Date Prévue'];
+  const rows = toDelete.map((c: any) => [c.id, c.recipient, c.subject, c.scheduledAt]);
+  downloadCSV(headers, rows, 'mail-queue-backup');
+
+  try {
+    await $fetch(`/api/mails/admin-queue`, {
+      method: 'POST',
+      body: { action: 'cancel', ids: selectedItems.value }
+    });
+    notify.success('Programmations annulées');
+    selectedItems.value = [];
+    refreshQueue();
+  } catch (e: any) {
+    notify.error('Erreur', e.message);
+  }
+};
+
+watch(activeView, () => {
+  selectedItems.value = [];
+});
+
 // --- DYNAMIC STATS ---
 const activeStats = computed(() => {
   if (activeView.value === 'journal' || activeView.value === 'archive') {
@@ -166,7 +221,18 @@ const paginatedQueue = computed(() => {
 });
 
 // --- COLUMNS ---
+const queueColumns = [
+  { accessorKey: 'selection', header: '' },
+  { accessorKey: 'recipient', header: 'Destinataire' },
+  { accessorKey: 'subject', header: 'Objet' },
+  { accessorKey: 'status', header: 'Statut' },
+  { accessorKey: 'scheduledAt', header: 'Prévu pour' },
+  { accessorKey: 'retryCount', header: 'Essais' },
+  { accessorKey: 'actions', header: '' }
+];
+
 const journalColumns = [
+  { accessorKey: 'selection', header: '' },
   { accessorKey: 'direction', header: '' },
   { accessorKey: 'date', header: 'Date' },
   { accessorKey: 'context', header: 'Contexte' },
@@ -174,15 +240,6 @@ const journalColumns = [
   { accessorKey: 'to', header: 'Destinataire (À)' },
   { accessorKey: 'subject', header: 'Objet' },
   { accessorKey: 'status', header: 'Statut' },
-];
-
-const queueColumns = [
-  { accessorKey: 'recipient', header: 'Destinataire' },
-  { accessorKey: 'subject', header: 'Objet' },
-  { accessorKey: 'status', header: 'Statut' },
-  { accessorKey: 'scheduledAt', header: 'Prévu pour' },
-  { accessorKey: 'retryCount', header: 'Essais' },
-  { accessorKey: 'actions', header: '' }
 ];
 
 function formatDate(dateStr: any) {
@@ -261,6 +318,11 @@ const cancelScheduled = async (id: string) => {
              </h2>
           </div>
           <div class="flex items-center gap-2">
+            <div v-if="selectedItems.length > 0" class="flex items-center gap-2 mr-4 animate-in fade-in slide-in-from-right-4">
+              <span class="text-xs font-black text-primary">{{ selectedItems.length }} sélectionnés</span>
+              <UButton v-if="activeView === 'queue'" label="Tout annuler & Exporter" icon="i-lucide:trash-2" color="error" variant="soft" size="sm" @click="cancelSelectedQueue" />
+              <UButton v-else label="Exporter sélectionnés" icon="i-lucide:download" color="primary" variant="soft" size="sm" @click="downloadCSV([], [], 'selected-logs')" />
+            </div>
             <UButton 
                 label="Exporter"
                 icon="i-lucide:download" 
@@ -344,6 +406,13 @@ const cancelScheduled = async (id: string) => {
           <div class="bg-white dark:bg-neutral-900 rounded-2xl border border-default shadow-sm overflow-hidden min-h-[400px] flex flex-col">
             <div class="flex-1 overflow-auto bg-white dark:bg-neutral-900">
                 <UTable :data="paginatedJournal" :columns="journalColumns" class="w-full relative">
+                   <template #selection-header>
+                      <UCheckbox :model-value="selectedItems.length === paginatedJournal.length && paginatedJournal.length > 0" @change="selectAll(paginatedJournal)" />
+                   </template>
+                    <template #selection-data="{ row }">
+                       <UCheckbox :model-value="selectedItems.includes(row.original.id as string)" @change="toggleSelection(row.original.id as string)" />
+                    </template>
+
                    <template #direction-data="{ row }">
                       <div :class="[
                             'p-2 rounded-xl flex items-center justify-center shrink-0 size-9 shadow-inner',
@@ -397,6 +466,12 @@ const cancelScheduled = async (id: string) => {
            <div class="bg-white dark:bg-neutral-900 rounded-2xl border border-default shadow-sm overflow-hidden min-h-[400px] flex flex-col">
             <div class="flex-1 overflow-auto bg-white dark:bg-neutral-900">
                <UTable :data="paginatedQueue" :columns="queueColumns" class="w-full">
+                  <template #selection-header>
+                    <UCheckbox :model-value="selectedItems.length === paginatedQueue.length && paginatedQueue.length > 0" @change="selectAll(paginatedQueue)" />
+                  </template>
+                  <template #selection-data="{ row }">
+                    <UCheckbox :model-value="selectedItems.includes(row.original.id as string)" @change="toggleSelection(row.original.id as string)" />
+                  </template>
                   <template #recipient-data="{ row }">
                     <span class="font-black text-highlighted">{{ row.original.recipient }}</span>
                  </template>
