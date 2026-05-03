@@ -18,6 +18,7 @@ export default defineEventHandler(async (event) => {
       optInForum: true,
       optInChangelog: true,
       optInMentions: true,
+      optInMentionMail: true,
       optInReplies: true
     };
   }

@@ -11,7 +11,8 @@ export default defineEventHandler(async (event) => {
     newsletter: body.newsletter,
     marketing: body.marketing,
     changelog: body.changelog,
-    mentions: body.mentions,
+    mentions: body.mentions_push,
+    mentionsEmail: body.mentions_email,
     replies: body.replies
   });
 

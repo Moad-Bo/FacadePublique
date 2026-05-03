@@ -10,17 +10,6 @@ definePageMeta({
 
 const notify = useNotify();
 
-// --- DATA FETCHING ---
-const { data: logsData, refresh: refreshLogs, pending: loadingLogs } = await useFetch<any>('/api/mails/logs', { 
-  lazy: true, 
-  default: () => ({ logs: [], stats: { outgoing: 0, incoming: 0 } }) 
-});
-
-const { data: queue, refresh: refreshQueue, pending: loadingQueue } = await useFetch<any[]>('/api/mails/queue', { 
-  lazy: true, 
-  default: () => [] 
-});
-
 // --- UI STATE ---
 const activeView = ref<'journal' | 'queue' | 'archive'>('journal');
 const searchQuery = ref('');
@@ -28,6 +17,28 @@ const filterContext = ref<any>(null);
 const contextMode = ref<'all' | 'webmailer' | 'campaign'>('all');
 const isMetricSidebarCollapsed = ref(false);
 const isExportModalOpen = ref(false);
+const isCancelModalOpen = ref(false);
+const itemsToCancel = ref<any[]>([]);
+
+// --- DATE FILTER ---
+const dateFrom = ref<string>('');
+const dateTo = ref<string>('');
+
+// --- DATA FETCHING ---
+const { data: logsData, refresh: refreshLogs, pending: loadingLogs } = await useFetch<any>('/api/mails/logs', { 
+  lazy: true,
+  query: { 
+    dateFrom, 
+    dateTo,
+    period: '30d'
+  },
+  default: () => ({ logs: [], stats: { outgoing: 0, incoming: 0 } }) 
+});
+
+const { data: queue, refresh: refreshQueue, pending: loadingQueue } = await useFetch<any[]>('/api/mails/queue', { 
+  lazy: true, 
+  default: () => [] 
+});
 
 // --- MULTI-SELECTION & ACTIONS ---
 const selectedItems = ref<string[]>([]);
@@ -38,11 +49,22 @@ const toggleSelection = (id: string) => {
     selectedItems.value.push(id);
   }
 };
-const selectAll = (list: any[]) => {
-  if (selectedItems.value.length === list.length && list.length > 0) {
+
+const isAllSelected = computed(() => {
+  const list = activeView.value === 'queue' ? processedQueue.value : [];
+  return list.length > 0 && list.every((i: any) => selectedItems.value.includes(i.id));
+});
+
+const isIndeterminate = computed(() => {
+  const list = activeView.value === 'queue' ? processedQueue.value : [];
+  return selectedItems.value.length > 0 && !isAllSelected.value;
+});
+
+const toggleSelectAll = () => {
+  if (isAllSelected.value) {
     selectedItems.value = [];
-  } else {
-    selectedItems.value = list.map(i => i.id);
+  } else if (activeView.value === 'queue') {
+    selectedItems.value = processedQueue.value.map((i: any) => i.id);
   }
 };
 
@@ -58,22 +80,21 @@ const downloadCSV = (headers: string[], rows: any[][], filename: string) => {
     notify.success('Export de sauvegarde généré');
 };
 
-const cancelSelectedQueue = async () => {
+const openCancelModal = () => {
   if (selectedItems.value.length === 0) return;
-  if (!confirm(`Annuler ${selectedItems.value.length} envois ? Un export de sauvegarde sera généré.`)) return;
+  itemsToCancel.value = (queue.value || []).filter((c: any) => selectedItems.value.includes(c.id));
+  isCancelModalOpen.value = true;
+};
 
-  const toDelete = (queue.value || []).filter((c: any) => selectedItems.value.includes(c.id));
-  const headers = ['ID', 'Destinataire', 'Sujet', 'Date Prévue'];
-  const rows = toDelete.map((c: any) => [c.id, c.recipient, c.subject, c.scheduledAt]);
-  downloadCSV(headers, rows, 'mail-queue-backup');
-
+const handleCancelConfirmed = async () => {
+  const ids = itemsToCancel.value.map(i => i.id);
   try {
     await $fetch(`/api/mails/admin-queue`, {
       method: 'POST',
-      body: { action: 'cancel', ids: selectedItems.value }
+      body: { action: 'delete', ids }
     });
     notify.success('Programmations annulées');
-    selectedItems.value = [];
+    selectedItems.value = selectedItems.value.filter(id => !ids.includes(id));
     refreshQueue();
   } catch (e: any) {
     notify.error('Erreur', e.message);
@@ -154,26 +175,37 @@ const itemsPerPage = 12;
 const processedJournal = computed(() => {
   let list = (logsData.value as any)?.logs || [];
 
-  const webmailerBase = ['contact', 'moderation', 'support', 'system'];
-  const campaignBase = ['marketing', 'newsletter', 'changelog'];
+  const webmailerBase = ['contact', 'moderation', 'support', 'system', 'webmailer'];
+  const campaignBase = ['campaign_newsletter', 'campaign_changelog', 'campaign_promo', 'campaign', 'campaign_batch', 'marketing', 'newsletter', 'changelog'];
 
   // Mode filtering
   if (contextMode.value === 'webmailer') {
     list = list.filter((l: any) => webmailerBase.includes(l.context));
   } else if (contextMode.value === 'campaign') {
-    list = list.filter((l: any) => campaignBase.includes(l.context) || l.context?.toLowerCase().startsWith('camp'));
+    list = list.filter((l: any) => campaignBase.includes(l.context));
   }
 
   // Split view filtering (Journal vs Archive)
   if (activeView.value === 'archive') {
-    list = list.filter((l: any) => !webmailerBase.includes(l.context) && !campaignBase.includes(l.context) && !l.context?.toLowerCase().startsWith('camp'));
+    list = list.filter((l: any) => !webmailerBase.includes(l.context) && !campaignBase.includes(l.context));
   } else if (activeView.value === 'journal') {
-    list = list.filter((l: any) => webmailerBase.includes(l.context) || campaignBase.includes(l.context) || l.context?.toLowerCase().startsWith('camp'));
+    list = list.filter((l: any) => webmailerBase.includes(l.context) || campaignBase.includes(l.context));
   }
 
   // UI select filter
   if (filterContext.value && filterContext.value.value !== 'all') {
     list = list.filter((l: any) => l.context === filterContext.value.value);
+  }
+
+  // Date Range Search
+  if (dateFrom.value) {
+    const from = new Date(dateFrom.value);
+    list = list.filter((l: any) => l.date && new Date(l.date) >= from);
+  }
+  if (dateTo.value) {
+    const to = new Date(dateTo.value);
+    to.setHours(23, 59, 59, 999);
+    list = list.filter((l: any) => l.date && new Date(l.date) <= to);
   }
 
   // Text Search
@@ -195,7 +227,7 @@ const paginatedJournal = computed(() => {
 });
 
 // Watchers pour reset la pagination si on cherche
-watch([searchQuery, filterContext, activeView, contextMode], () => {
+watch([searchQuery, filterContext, activeView, contextMode, dateFrom, dateTo], () => {
    journalPage.value = 1;
    queuePage.value = 1;
 });
@@ -203,16 +235,43 @@ watch([searchQuery, filterContext, activeView, contextMode], () => {
 
 // --- QUEUE PAGINATION ---
 const queuePage = ref(1);
-const queueSearchQuery = ref('');
 const processedQueue = computed(() => {
   let list = queue.value || [];
-  if (queueSearchQuery.value) {
-     const q = queueSearchQuery.value.toLowerCase();
+
+  // Mode filtering
+  const webmailerBase = ['contact', 'moderation', 'support', 'system', 'webmailer'];
+  const campaignBase = ['campaign_newsletter', 'campaign_changelog', 'campaign_promo', 'campaign', 'campaign_batch', 'marketing', 'newsletter', 'changelog'];
+
+  if (contextMode.value === 'webmailer') {
+    list = list.filter((l: any) => webmailerBase.includes(l.fromContext || l.type));
+  } else if (contextMode.value === 'campaign') {
+    list = list.filter((l: any) => campaignBase.includes(l.fromContext || l.type));
+  }
+
+  // UI select filter
+  if (filterContext.value && filterContext.value.value !== 'all') {
+    list = list.filter((l: any) => (l.fromContext || l.type) === filterContext.value.value);
+  }
+
+  // Text Search
+  if (searchQuery.value) {
+     const q = searchQuery.value.toLowerCase();
      list = list.filter((l: any) => 
        l.subject?.toLowerCase().includes(q) || 
        l.recipient?.toLowerCase().includes(q)
      );
   }
+  
+  if (dateFrom.value) {
+    const from = new Date(dateFrom.value);
+    list = list.filter((l: any) => l.scheduledAt && new Date(l.scheduledAt) >= from);
+  }
+  if (dateTo.value) {
+    const to = new Date(dateTo.value);
+    to.setHours(23, 59, 59, 999);
+    list = list.filter((l: any) => l.scheduledAt && new Date(l.scheduledAt) <= to);
+  }
+
   return list;
 });
 const paginatedQueue = computed(() => {
@@ -232,7 +291,6 @@ const queueColumns = [
 ];
 
 const journalColumns = [
-  { accessorKey: 'selection', header: '' },
   { accessorKey: 'direction', header: '' },
   { accessorKey: 'date', header: 'Date' },
   { accessorKey: 'context', header: 'Contexte' },
@@ -250,18 +308,9 @@ function formatDate(dateStr: any) {
   }).format(new Date(dateStr));
 }
 
-const cancelScheduled = async (id: string) => {
-    if (!confirm('Annuler cet envoi programmé ?')) return;
-    try {
-        await $fetch(`/api/mails/admin-queue`, {
-            method: 'POST',
-            body: { action: 'cancel', ids: [id] }
-        });
-        notify.success('Envoi annulé');
-        refreshQueue();
-    } catch (e: any) {
-        notify.error('Erreur', e.message);
-    }
+const cancelScheduled = (item: any) => {
+    itemsToCancel.value = [item];
+    isCancelModalOpen.value = true;
 }
 </script>
 
@@ -320,7 +369,7 @@ const cancelScheduled = async (id: string) => {
           <div class="flex items-center gap-2">
             <div v-if="selectedItems.length > 0" class="flex items-center gap-2 mr-4 animate-in fade-in slide-in-from-right-4">
               <span class="text-xs font-black text-primary">{{ selectedItems.length }} sélectionnés</span>
-              <UButton v-if="activeView === 'queue'" label="Tout annuler & Exporter" icon="i-lucide:trash-2" color="error" variant="soft" size="sm" @click="cancelSelectedQueue" />
+              <UButton v-if="activeView === 'queue'" label="Tout annuler" icon="i-lucide:trash-2" color="error" variant="soft" size="sm" @click="openCancelModal" />
               <UButton v-else label="Exporter sélectionnés" icon="i-lucide:download" color="primary" variant="soft" size="sm" @click="downloadCSV([], [], 'selected-logs')" />
             </div>
             <UButton 
@@ -368,22 +417,32 @@ const cancelScheduled = async (id: string) => {
               class="w-full bg-white dark:bg-neutral-900"
             />
           </div>
+
+          <!-- FILTRE DATE -->
+          <div class="flex items-center gap-2 bg-white dark:bg-neutral-900 p-1 rounded-lg border border-default shadow-sm px-2">
+            <UInput v-model="dateFrom" type="date" size="sm" variant="none" class="w-32 text-xs" />
+            <span class="text-xs text-dimmed">→</span>
+            <UInput v-model="dateTo" type="date" size="sm" variant="none" class="w-32 text-xs" />
+            <UButton v-if="dateFrom || dateTo" icon="i-lucide:x" size="xs" variant="ghost" color="neutral" @click="dateFrom = ''; dateTo = ''" />
+          </div>
           
           <div class="flex items-center gap-2 bg-white dark:bg-neutral-900 p-1 rounded-lg border border-default shadow-sm">
-             <UButton 
-                v-for="mode in [
-                  { id: 'all', icon: 'i-lucide:globe', tooltip: 'Tous' },
-                  { id: 'webmailer', icon: 'i-lucide:inbox', tooltip: 'Webmailer' },
-                  { id: 'campaign', icon: 'i-lucide:send', tooltip: 'Campagnes' }
-                ]"
-                :key="mode.id"
-                :icon="mode.icon"
-                size="xs"
-                :variant="contextMode === mode.id ? 'solid' : 'ghost'"
-                :color="contextMode === mode.id ? 'primary' : 'neutral'"
-                @click="contextMode = mode.id as any"
-             />
-             <div class="w-px h-4 bg-default mx-1" />
+             <template v-if="activeView !== 'queue'">
+               <UButton 
+                  v-for="mode in [
+                    { id: 'all', icon: 'i-lucide:globe', tooltip: 'Tous' },
+                    { id: 'webmailer', icon: 'i-lucide:inbox', tooltip: 'Webmailer' },
+                    { id: 'campaign', icon: 'i-lucide:send', tooltip: 'Campagnes' }
+                  ]"
+                  :key="mode.id"
+                  :icon="mode.icon"
+                  size="xs"
+                  :variant="contextMode === mode.id ? 'solid' : 'ghost'"
+                  :color="contextMode === mode.id ? 'primary' : 'neutral'"
+                  @click="contextMode = mode.id as any"
+               />
+               <div class="w-px h-4 bg-default mx-1" />
+             </template>
              <USelectMenu 
                v-model="filterContext" 
                :items="contextItems" 
@@ -406,12 +465,6 @@ const cancelScheduled = async (id: string) => {
           <div class="bg-white dark:bg-neutral-900 rounded-2xl border border-default shadow-sm overflow-hidden min-h-[400px] flex flex-col">
             <div class="flex-1 overflow-auto bg-white dark:bg-neutral-900">
                 <UTable :data="paginatedJournal" :columns="journalColumns" class="w-full relative">
-                   <template #selection-header>
-                      <UCheckbox :model-value="selectedItems.length === paginatedJournal.length && paginatedJournal.length > 0" @change="selectAll(paginatedJournal)" />
-                   </template>
-                    <template #selection-data="{ row }">
-                       <UCheckbox :model-value="selectedItems.includes(row.original.id as string)" @change="toggleSelection(row.original.id as string)" />
-                    </template>
 
                    <template #direction-data="{ row }">
                       <div :class="[
@@ -420,6 +473,17 @@ const cancelScheduled = async (id: string) => {
                          ]">
                             <UIcon :name="row.original.direction === 'incoming' ? 'i-lucide:arrow-down-left' : 'i-lucide:arrow-up-right'" class="size-4" />
                       </div>
+                   </template>
+
+                   <template #to-data="{ row }">
+                      <span class="font-black text-highlighted">
+                        <template v-if="row.original.to === '__batch__'">
+                          <UBadge size="xs" variant="soft" color="info" class="font-black uppercase tracking-widest text-[10px]">
+                            <UIcon name="i-lucide:users" class="mr-1 size-3"/> Envoi de Masse
+                          </UBadge>
+                        </template>
+                        <template v-else>{{ row.original.to }}</template>
+                      </span>
                    </template>
 
                    <template #date-data="{ row }">
@@ -456,7 +520,7 @@ const cancelScheduled = async (id: string) => {
             <!-- FOOTER PAGINATION -->
             <div class="px-6 py-4 border-t border-default flex items-center justify-between bg-neutral-50/50 dark:bg-neutral-900/30 shrink-0">
                <p class="text-xs text-dimmed">Total : <span class="font-bold text-default">{{ processedJournal.length }}</span> logs</p>
-               <UPagination v-model:page="journalPage" :total="processedJournal.length" :items-per-page="itemsPerPage" />
+               <UPagination v-model:page="journalPage" :total="processedJournal.length" :items-per-page="itemsPerPage" show-edges :sibling-count="1" size="sm" color="neutral" active-color="primary" />
             </div>
           </div>
         </template>
@@ -467,7 +531,7 @@ const cancelScheduled = async (id: string) => {
             <div class="flex-1 overflow-auto bg-white dark:bg-neutral-900">
                <UTable :data="paginatedQueue" :columns="queueColumns" class="w-full">
                   <template #selection-header>
-                    <UCheckbox :model-value="selectedItems.length === paginatedQueue.length && paginatedQueue.length > 0" @change="selectAll(paginatedQueue)" />
+                    <UCheckbox :model-value="isAllSelected" :indeterminate="isIndeterminate" @change="toggleSelectAll" />
                   </template>
                   <template #selection-data="{ row }">
                     <UCheckbox :model-value="selectedItems.includes(row.original.id as string)" @change="toggleSelection(row.original.id as string)" />
@@ -498,7 +562,7 @@ const cancelScheduled = async (id: string) => {
                       color="error" 
                       size="sm" 
                       class="hover:bg-error/10"
-                      @click="cancelScheduled(row.original.id)" 
+                      @click="cancelScheduled(row.original)" 
                     />
                  </template>
                </UTable>
@@ -515,7 +579,7 @@ const cancelScheduled = async (id: string) => {
                <p class="text-xs text-dimmed font-black uppercase tracking-widest">
                   Total : {{ processedQueue.length }} programmation(s)
                </p>
-               <UPagination v-model:page="queuePage" :total="processedQueue.length" :items-per-page="itemsPerPage" />
+               <UPagination v-model:page="queuePage" :total="processedQueue.length" :items-per-page="itemsPerPage" show-edges :sibling-count="1" size="sm" color="neutral" active-color="primary" />
             </div>
           </div>
         </template>
@@ -527,6 +591,13 @@ const cancelScheduled = async (id: string) => {
       v-if="isExportModalOpen" 
       v-model:open="isExportModalOpen" 
       :export-type="activeView" 
+    />
+
+    <DashboardComLogCancelQueueModal
+      v-if="isCancelModalOpen"
+      v-model:open="isCancelModalOpen"
+      :items="itemsToCancel"
+      @confirmed="handleCancelConfirmed"
     />
   </div>
 </template>

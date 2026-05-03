@@ -21,7 +21,7 @@ import { defineEventHandler, readMultipartFormData, readBody, getHeader, createE
 import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
 import { db } from '../../../utils/db';
 import { mailbox, mailboxAttachment } from '../../../../drizzle/src/db/schema';
-import { awsAssetsService } from '../../../utils/aws-assets';
+import { StorageService } from '../../../utils/storage-service';
 import { notify } from '../../../utils/notify';
 import { useRuntimeConfig } from '#imports';
 
@@ -203,9 +203,9 @@ export default defineEventHandler(async (event) => {
   // ── 7. Mapping de la boîte de destination ──────────────────────────────────
   const config = useRuntimeConfig();
   const INBOUND_MAP: Record<string, string> = {
-    [config.mailEmailSupport?.toLowerCase()]: 'support',
-    [config.mailEmailContact?.toLowerCase()]: 'contact',
-    [config.mailEmailMod?.toLowerCase()]: 'moderation',
+    [String(config.mailEmailSupport || '').toLowerCase()]: 'support',
+    [String(config.mailEmailContact || '').toLowerCase()]: 'contact',
+    [String(config.mailEmailMod || '').toLowerCase()]: 'moderation',
   };
 
   const recipientList = recipient.split(',').map(r => r.trim().toLowerCase());
@@ -254,20 +254,28 @@ export default defineEventHandler(async (event) => {
       for (const att of attachmentFields) {
         if (!att.data || !att.filename) continue;
         try {
-          const s3Key = awsAssetsService.formatKey('attachments', att.filename);
-          await awsAssetsService.uploadToS3(s3Key, att.data, att.type || 'application/octet-stream');
+          const stored = await StorageService.upload({
+            body: att.data,
+            filename: att.filename,
+            mimeType: att.type || 'application/octet-stream',
+            size: att.data.length,
+            type: 'mailbox_attachment',
+            userId: 'system', // Inbound system processed
+            visibility: 'private',
+            deduplicate: true
+          });
+
           await db.insert(mailboxAttachment).values({
             id: randomUUID(),
             mailboxId: mailId,
             filename: att.filename,
             mimeType: att.type || 'application/octet-stream',
             size: att.data.length,
-            s3Key: s3Key,
+            s3Key: stored.s3Key,
+            assetId: stored.id
           });
-          // Finalisation (Tagging S3 status=validated)
-          await awsAssetsService.finalizeAsset(s3Key);
           
-          console.info(`[INBOUND] Pièce jointe validée: ${att.filename} (${s3Key})`);
+          console.info(`[INBOUND] Pièce jointe validée: ${att.filename} (${stored.s3Key})`);
         } catch (attErr: any) {
           console.error(`[INBOUND] Échec traitement pièce jointe ${att.filename}:`, attErr.message);
         }

@@ -13,6 +13,7 @@ export const audienceService = {
     forum?: boolean;
     changelog?: boolean;
     mentions?: boolean;
+    mentionsEmail?: boolean;
     replies?: boolean;
   } = {}) {
     try {
@@ -28,6 +29,7 @@ export const audienceService = {
             optInForum: optIns.forum ?? existing.optInForum,
             optInChangelog: optIns.changelog ?? existing.optInChangelog,
             optInMentions: optIns.mentions ?? existing.optInMentions,
+            optInMentionMail: optIns.mentionsEmail ?? existing.optInMentionMail,
             optInReplies: optIns.replies ?? existing.optInReplies,
             source: source || existing.source,
             updatedAt: new Date()
@@ -46,6 +48,7 @@ export const audienceService = {
         optInForum: optIns.forum ?? true,
         optInChangelog: optIns.changelog ?? true,
         optInMentions: optIns.mentions ?? true,
+        optInMentionMail: optIns.mentionsEmail ?? true,
         optInReplies: optIns.replies ?? true,
       });
       return id;
@@ -101,6 +104,7 @@ export const audienceService = {
     forum?: boolean;
     changelog?: boolean;
     mentions?: boolean;
+    mentionsEmail?: boolean;
     replies?: boolean;
   }) {
     try {
@@ -123,6 +127,7 @@ export const audienceService = {
           optInForum: optIns.forum ?? existing.optInForum,
           optInChangelog: optIns.changelog ?? existing.optInChangelog,
           optInMentions: optIns.mentions ?? existing.optInMentions,
+          optInMentionMail: optIns.mentionsEmail ?? existing.optInMentionMail,
           optInReplies: optIns.replies ?? existing.optInReplies,
           updatedAt: new Date()
         })

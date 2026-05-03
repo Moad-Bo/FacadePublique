@@ -11,11 +11,11 @@ export const MailListSchema = z.object({
     sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
     tab: z.enum(['all', 'unread', 'pinned', 'important']).optional().default('all'),
     type: z.enum([
-        "system", "newsletter", "contact", "notification", 
+        "system", "newsletter", "contact", "notification",
         "mod-forum", "staff", "campaign", "marketing"
     ]).optional(),
-    page: z.preprocess((val) => parseInt(val as string, 10), z.number().min(1).default(1)),
-    perPage: z.preprocess((val) => parseInt(val as string, 10), z.number().min(1).max(200).default(50))
+    page: z.preprocess((val) => val ? parseInt(val as string, 10) : undefined, z.number().min(1).default(1)),
+    perPage: z.preprocess((val) => val ? parseInt(val as string, 10) : undefined, z.number().min(1).max(200).default(50))
 })
 
 /**

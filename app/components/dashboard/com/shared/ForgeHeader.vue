@@ -14,7 +14,7 @@ const showCcBcc = ref(false)
 </script>
 
 <template>
-  <div class="bg-white dark:bg-neutral-900 border border-default rounded-[2.5rem] shadow-xl p-8 space-y-4 shrink-0 transition-all duration-500 relative overflow-hidden">
+  <div id="forge-header" class="bg-white dark:bg-neutral-900 border border-default rounded-[2.5rem] shadow-xl p-8 space-y-4 shrink-0 transition-all duration-500 relative overflow-hidden">
      <!-- Accent design -->
      <div class="absolute top-0 right-0 w-64 h-full bg-gradient-to-l from-primary/5 to-transparent pointer-events-none" />
 

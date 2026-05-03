@@ -11,6 +11,8 @@ const formData = computed({
 
 <template>
   <div class="p-8 h-full flex flex-col gap-6 overflow-y-auto">
+    <!-- DESTINATAIRE ANCHOR -->
+    <div id="forge-header" class="hidden" />
     <div class="flex items-center gap-4 p-6 bg-primary/5 rounded-3xl border border-primary/10">
        <div class="p-3 bg-primary/10 text-primary rounded-2xl">
           <UIcon name="i-lucide:reply" class="size-6" />

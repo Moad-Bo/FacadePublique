@@ -24,8 +24,8 @@ watch(currentPrefs, (newVal) => {
     settings.newsletter = newVal.optInNewsletter;
     settings.marketing = newVal.optInMarketing;
     settings.changelog = newVal.optInChangelog;
-    settings.mentions_email = newVal.optInMentions;
-    settings.mentions_push = newVal.optInMentions; // Unified for now
+    settings.mentions_email = newVal.optInMentionMail;
+    settings.mentions_push = newVal.optInMentions;
     settings.replies_inapp = newVal.optInReplies;
   }
 }, { immediate: true });
@@ -39,7 +39,8 @@ const saveSettings = async () => {
         newsletter: settings.newsletter,
         marketing: settings.marketing,
         changelog: settings.changelog,
-        mentions: settings.mentions_email,
+        mentions_email: settings.mentions_email,
+        mentions_push: settings.mentions_push,
         replies: settings.replies_inapp
       }
     });
@@ -135,8 +136,18 @@ const saveSettings = async () => {
                 <div class="p-2 space-y-1">
                     <div class="flex items-center justify-between p-4 rounded-2xl hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors">
                         <div class="space-y-1">
-                            <p class="text-sm font-bold">Mentions (@pseudo)</p>
-                            <p class="text-xs text-neutral-500">Alertes In-App et Email quand vous êtes cité dans un contenu.</p>
+                            <p class="text-sm font-bold">Mentions In-App (@pseudo)</p>
+                            <p class="text-xs text-neutral-500">Alertes In-App (cloche) quand vous êtes cité.</p>
+                        </div>
+                        <USwitch v-model="settings.mentions_push" color="secondary" />
+                    </div>
+
+                    <USeparator class="mx-4 opacity-50" />
+
+                    <div class="flex items-center justify-between p-4 rounded-2xl hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors">
+                        <div class="space-y-1">
+                            <p class="text-sm font-bold">Emails de mention</p>
+                            <p class="text-xs text-neutral-500">Alerte par email quand vous êtes cité dans un contenu.</p>
                         </div>
                         <USwitch v-model="settings.mentions_email" color="secondary" />
                     </div>

@@ -1,39 +1,24 @@
-import mysql from 'mysql2/promise';
-import fs from 'fs';
-import path from 'path';
-import dotenv from 'dotenv';
-
-dotenv.config();
+import 'dotenv/config';
+import { db } from './server/utils/db';
+import { sql } from 'drizzle-orm';
 
 async function run() {
-    const caCert = fs.readFileSync(path.resolve(process.cwd(), 'content-db.pem'), 'utf8');
-    
-    const connection = await mysql.createConnection({
-        host: process.env.MYSQL_HOST,
-        port: Number(process.env.MYSQL_PORT),
-        user: process.env.MYSQL_USER,
-        password: process.env.MYSQL_PASSWORD,
-        database: process.env.MYSQL_DATABASE,
-        ssl: {
-            rejectUnauthorized: true,
-            ca: caCert,
-        }
-    });
-
-    console.log('Connexion réussie.');
-
     try {
-        await connection.execute('ALTER TABLE mailbox_folder ADD COLUMN color VARCHAR(20) DEFAULT "neutral"');
-        console.log('Colonne "color" ajoutée avec succès.');
-    } catch (e: any) {
-        if (e.message.includes('Duplicate column name')) {
-            console.log('La colonne "color" existe déjà.');
-        } else {
-            console.error('Erreur:', e.message);
-        }
-    } finally {
-        await connection.end();
+        await db.execute(sql`ALTER TABLE email_log ADD COLUMN from_alias varchar(255);`);
+        console.log("Migration successful: added from_alias to email_log");
+    } catch(e) {
+        console.error(e);
     }
+    
+    // Si la colonne r2_key existe encore, on la renomme en s3_key (selon les requêtes précédentes)
+    try {
+        await db.execute(sql`ALTER TABLE asset CHANGE COLUMN r2_key s3_key varchar(500);`);
+        console.log("Migration successful: renamed r2_key to s3_key in asset");
+    } catch (e) {
+        console.log("Asset column rename might be already done or failed:", e.message);
+    }
+    
+    process.exit(0);
 }
 
 run();

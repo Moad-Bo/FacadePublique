@@ -24,50 +24,29 @@ export default defineNuxtConfig({
     // Mailgun isolation
     mailgunApiKey: process.env.MAILGUN_API_KEY,
     mailgunWebhookSigningKey: process.env.MAILGUN_WEBHOOK_SIGNING_KEY,
+    
+    // Domaine API racine pour le routage de base
+    mailgunApiDomain: process.env.MAILGUN_API_DOMAIN || 'support.techkne.com',
+
     // Adresses expéditeurs complètes — source de vérité depuis .env
-    mailEmailSupport: process.env.MAIL_DOMAIN_SUPPORT || 'support@support.techkne.com',
-    mailEmailContact: process.env.MAIL_DOMAIN_CONTACT || 'contact@support.techkne.com',
-    mailEmailMod: process.env.MAIL_DOMAIN_MOD || 'moderation@support.techkne.com',
-
-    // Domaines pour Mailgun (extraits des emails)
-    mailDomainSystem: (process.env.MAIL_DOMAIN_SYSTEM || 'system@support.techkne.com').split('@').pop(),
-    mailDomainMarketing: (process.env.MAIL_DOMAIN_MARKETING || 'marketing@support.techkne.com').split('@').pop(),
-    mailDomainSupport: (process.env.MAIL_DOMAIN_SUPPORT || 'support@support.techkne.com').split('@').pop(),
-
-    // Adresses complètes par type de campagne (OUTBOUND ONLY — isolation de réputation)
-    mailDomainCampaignNewsletter: process.env.MAIL_DOMAIN_CAMPAIGN_NEWSLETTER || 'newsletter@support.techkne.com',
-    mailDomainCampaignChangelog:  process.env.MAIL_DOMAIN_CAMPAIGN_CHANGELOG  || 'changelog@support.techkne.com',
-    mailDomainCampaignPromo:      process.env.MAIL_DOMAIN_CAMPAIGN_PROMO      || 'marketing@support.techkne.com',
+    mailSenderSystem: process.env.MAIL_SENDER_SYSTEM || 'system@support.techkne.com',
+    mailSenderNewsletter: process.env.MAIL_SENDER_NEWSLETTER || 'newsletter@support.techkne.com',
+    mailSenderChangelog: process.env.MAIL_SENDER_CHANGELOG || 'changelog@support.techkne.com',
+    mailSenderPromo: process.env.MAIL_SENDER_PROMO || 'marketing@support.techkne.com',
+    mailSenderSupport: process.env.MAIL_SENDER_SUPPORT || 'support@support.techkne.com',
+    mailSenderContact: process.env.MAIL_SENDER_CONTACT || 'contact@support.techkne.com',
+    mailSenderModeration: process.env.MAIL_SENDER_MODERATION || 'moderation@support.techkne.com',
 
     smtpHost: process.env.SMTP_HOST || 'smtp.eu.mailgun.org',
     smtpPort: parseInt(process.env.SMTP_PORT || '587'),
     smtpUser: process.env.SMTP_USER,
     smtpPass: process.env.SMTP_PASS,
 
-    /**
-     * MAILGUN_SENDER_CONTEXTS — Alias expéditeurs configurables
-     * Alignés avec MAIL_DOMAIN_SUPPORT, MAIL_DOMAIN_CONTACT, MAIL_DOMAIN_MOD
-     */
-    mailgunSenderContexts: process.env.MAILGUN_SENDER_CONTEXTS
-      || [
-        `Support:${process.env.MAIL_DOMAIN_SUPPORT || 'support@support.techkne.com'}`,
-        `Contact:${process.env.MAIL_DOMAIN_CONTACT || 'contact@support.techkne.com'}`,
-        `Moderation:${process.env.MAIL_DOMAIN_MOD || 'moderation@support.techkne.com'}`,
-        `Système:${process.env.MAIL_DOMAIN_SYSTEM || 'system@support.techkne.com'}`,
-        // Campagnes — alias dédiés par type
-        `Newsletter:${process.env.MAIL_DOMAIN_CAMPAIGN_NEWSLETTER || 'newsletter@support.techkne.com'}`,
-        `Changelog:${process.env.MAIL_DOMAIN_CAMPAIGN_CHANGELOG   || 'changelog@support.techkne.com'}`,
-        `Promotionnel:${process.env.MAIL_DOMAIN_CAMPAIGN_PROMO    || 'marketing@support.techkne.com'}`,
-      ].join(','),
     // Clés publiques (accessibles depuis le client via useRuntimeConfig().public)
     public: {
       authBaseUrl: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
-      // Version frontend: liste des labels uniquement (sans les emails privés)
-      // Dérivée depuis MAILGUN_SENDER_CONTEXTS ou depuis les variables de domaine
-      mailSenderLabels: (process.env.MAILGUN_SENDER_CONTEXTS || 'Support,Newsletter,Système')
-        .split(',')
-        .map(s => s.split(':')[0].trim())
-        .join(','),
+      // Version frontend: liste des labels (configurés statiquement maintenant que les alias sont typés)
+      mailSenderLabels: 'Support,Newsletter,Système,Changelog,Promotionnel,Moderation',
       assistant: {
         enabled: true,
         apiPath: '/__docus__/assistant'

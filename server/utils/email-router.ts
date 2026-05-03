@@ -25,19 +25,19 @@ export const CAMPAIGN_CONTEXT_CONFIG: Record<string, {
   description: string;
 }> = {
   [EmailContext.CAMPAIGN_NEWSLETTER]: {
-    envKey:      'mailDomainCampaignNewsletter',
+    envKey:      'mailSenderNewsletter',
     optInField:  'optInNewsletter',
     alias:       'Techknè Newsletter',
     description: 'Newsletter éditoriale régulière',
   },
   [EmailContext.CAMPAIGN_CHANGELOG]: {
-    envKey:      'mailDomainCampaignChangelog',
+    envKey:      'mailSenderChangelog',
     optInField:  'optInNewsletter',
     alias:       'Techknè Changelog',
     description: 'Notes de mise à jour produit',
   },
   [EmailContext.CAMPAIGN_PROMO]: {
-    envKey:      'mailDomainCampaignPromo',
+    envKey:      'mailSenderPromo',
     optInField:  'optInMarketing',
     alias:       'Techknè Offres',
     description: 'Communications promotionnelles et offres',
@@ -49,6 +49,7 @@ export interface EmailRoutingResult {
   domain: string;
   method: "api" | "smtp";
   reason?: string;
+  senderAlias?: string;
 }
 
 /**
@@ -59,42 +60,43 @@ export const emailRouter = {
     const config = useRuntimeConfig();
     const email = recipient.toLowerCase();
 
-    // 1. Détermination du domaine par défaut
-    let domain = config.mailDomainSystem || 'techkne.com';
+    // 1. Détermination du domaine d'API par défaut
+    let apiDomain = config.mailgunApiDomain || 'techkne.com';
     let method: "api" | "smtp" = "api";
 
     // 2. Logique spécifique par contexte
     switch (context) {
       case EmailContext.SYSTEM:
-        return { allowed: true, domain: config.mailDomainSystem, method: "api" };
+        return { allowed: true, domain: apiDomain, method: "api", senderAlias: config.mailSenderSystem };
 
       case EmailContext.COMMUNITY_TX:
       case EmailContext.BLOG_TX:
         const audienceForum = await this._getAudience(email);
         if (audienceForum && !audienceForum.optInForum) {
-          return { allowed: false, domain, method, reason: "Opt-out forum" };
+          return { allowed: false, domain: apiDomain, method, reason: "Opt-out forum", senderAlias: config.mailSenderSystem };
         }
-        return { allowed: true, domain: config.mailDomainSystem, method: "api" };
+        return { allowed: true, domain: apiDomain, method: "api", senderAlias: config.mailSenderSystem };
 
       case EmailContext.CAMPAIGN_NEWSLETTER:
       case EmailContext.CAMPAIGN_CHANGELOG:
       case EmailContext.CAMPAIGN_PROMO:
         const conf = CAMPAIGN_CONTEXT_CONFIG[context];
         const audienceCamp = await this._getAudience(email);
+        const sender = (config as any)[conf.envKey] || config.mailSenderSystem;
         if (!audienceCamp || !audienceCamp[conf.optInField]) {
-          return { allowed: false, domain: (config as any)[conf.envKey]?.split('@').pop() || domain, method, reason: `No ${conf.optInField} opt-in` };
+          return { allowed: false, domain: apiDomain, method, reason: `No ${conf.optInField} opt-in`, senderAlias: sender };
         }
-        return { allowed: true, domain: (config as any)[conf.envKey]?.split('@').pop() || domain, method: "api" };
+        return { allowed: true, domain: apiDomain, method: "api", senderAlias: sender };
 
       case EmailContext.WEBMAILER:
-        return { allowed: true, domain: config.mailDomainSupport, method: "smtp" };
+        return { allowed: true, domain: config.mailSenderSupport?.split('@').pop() || apiDomain, method: "smtp", senderAlias: config.mailSenderSupport };
 
       case EmailContext.MODERATION:
-        const modDomain = config.mailEmailMod?.split('@').pop() || config.mailDomainSupport;
-        return { allowed: true, domain: modDomain, method: "smtp" };
+        const modDomain = config.mailSenderModeration?.split('@').pop() || config.mailSenderSupport?.split('@').pop() || apiDomain;
+        return { allowed: true, domain: modDomain, method: "smtp", senderAlias: config.mailSenderModeration || config.mailSenderSupport };
 
       default:
-        return { allowed: true, domain, method };
+        return { allowed: true, domain: apiDomain, method, senderAlias: config.mailSenderSystem };
     }
   },
 

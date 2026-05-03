@@ -7,7 +7,11 @@ export default defineEventHandler(async (event) => {
     const session = await requireUserSession(event, { permission: 'manage_mail' })
     
     // Validation des query params via Zod
-    const query = await MailListSchema.parse(getQuery(event))
+    const parsed = MailListSchema.safeParse(getQuery(event))
+    if (!parsed.success) {
+        throw createError({ statusCode: 400, statusMessage: 'Bad Request - Invalid query parameters', data: parsed.error.format() })
+    }
+    const query = parsed.data;
 
     // 1. Déclenchement des filtres automatiques
     if (query.folder === 'inbox' && query.page === 1) {

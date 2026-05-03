@@ -81,34 +81,56 @@ export default defineEventHandler(async (event) => {
                 .where(eq(emailLog.messageId, messageId))
                 .limit(1);
 
+            let campaignIdToUpdate = log?.campaignId;
+
             if (log) {
                 // Mise à jour du statut du log
                 await db.update(emailLog)
                     .set({ status: eventType })
                     .where(eq(emailLog.id, log.id));
-
-                // Mise à jour des métriques de campagne si applicable
-                if (log.campaignId) {
-                    if (eventType === 'delivered') {
-                        await db.update(campaign)
-                            .set({ deliveredCount: sql`${campaign.deliveredCount} + 1` })
-                            .where(eq(campaign.id, log.campaignId));
-                    } else if (eventType === 'failed' || eventType === 'bounced') {
-                        await db.update(campaign)
-                            .set({ failedCount: sql`${campaign.failedCount} + 1` })
-                            .where(eq(campaign.id, log.campaignId));
-                    } else if (eventType === 'opened') {
-                        await db.update(campaign)
-                            .set({ openedCount: sql`${campaign.openedCount} + 1` })
-                            .where(eq(campaign.id, log.campaignId));
-                    } else if (eventType === 'clicked') {
-                        await db.update(campaign)
-                            .set({ clickedCount: sql`${campaign.clickedCount} + 1` })
-                            .where(eq(campaign.id, log.campaignId));
-                    }
-                }
             } else {
-                console.warn(`[Webhook] Aucun log trouvé pour messageId: ${messageId}`);
+                // Lazy Logging : si le log n'existe pas (cas des campagnes batch)
+                const tags = eventData.tags || [];
+                const tagCampaignId = tags[0]; // Nous mettons toujours campaignId dans X-Mailgun-Tag
+
+                if (tagCampaignId) {
+                    console.log(`[Webhook] Lazy Logging pour batch recipient: ${recipient}`);
+                    const newLogId = randomUUID();
+                    await db.insert(emailLog).values({
+                        id: newLogId,
+                        recipient: recipient,
+                        subject: 'Message Campagne Batch', // Sujet exact inconnu ici
+                        type: 'campaign', // Pourrait être plus précis, mais campaign suffit
+                        status: eventType,
+                        messageId: messageId,
+                        campaignId: tagCampaignId,
+                        sentAt: new Date()
+                    });
+                    campaignIdToUpdate = tagCampaignId;
+                } else {
+                    console.warn(`[Webhook] Aucun log trouvé pour messageId: ${messageId} et aucun tag campagne.`);
+                }
+            }
+
+            // Mise à jour des métriques de campagne si applicable
+            if (campaignIdToUpdate) {
+                if (eventType === 'delivered') {
+                    await db.update(campaign)
+                        .set({ deliveredCount: sql`${campaign.deliveredCount} + 1` })
+                        .where(eq(campaign.id, campaignIdToUpdate));
+                } else if (eventType === 'failed' || eventType === 'bounced') {
+                    await db.update(campaign)
+                        .set({ failedCount: sql`${campaign.failedCount} + 1` })
+                        .where(eq(campaign.id, campaignIdToUpdate));
+                } else if (eventType === 'opened') {
+                    await db.update(campaign)
+                        .set({ openedCount: sql`${campaign.openedCount} + 1` })
+                        .where(eq(campaign.id, campaignIdToUpdate));
+                } else if (eventType === 'clicked') {
+                    await db.update(campaign)
+                        .set({ clickedCount: sql`${campaign.clickedCount} + 1` })
+                        .where(eq(campaign.id, campaignIdToUpdate));
+                }
             }
         }
 

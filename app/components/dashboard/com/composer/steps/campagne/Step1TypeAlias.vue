@@ -100,10 +100,10 @@ const updateType = (typeId: CampaignTypeId) => {
             <div class="pt-3 border-t border-default">
               <p class="text-[9px] font-black uppercase text-dimmed tracking-widest mb-1.5">Opt-in requis</p>
               <UBadge
-                :label="type.optInField === 'optInNewsletter' ? 'Newsletter' : 'Marketing'"
+                :label="type.optInField === 'optInNewsletter' ? 'Newsletter' : type.optInField === 'optInChangelog' ? 'Changelog' : 'Marketing'"
                 size="xs"
                 variant="soft"
-                :color="type.optInField === 'optInNewsletter' ? 'primary' : 'warning'"
+                :color="type.optInField === 'optInNewsletter' ? 'primary' : type.optInField === 'optInChangelog' ? 'info' : 'warning'"
               />
             </div>
           </div>

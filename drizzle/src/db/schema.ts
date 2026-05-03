@@ -83,7 +83,10 @@ export const emailLog = mysqlTable("email_log", {
 	openCount: int("open_count").default(0),
 	content: text("content"),
 	sentAt: timestamp("sent_at").defaultNow(),
-});
+},
+(table) => [
+	index("email_log_type_sentAt_idx").on(table.type, table.sentAt),
+]);
 
 export const mailbox = mysqlTable("mailbox", {
 	id: varchar("id", { length: 36 }).primaryKey(),
@@ -155,6 +158,8 @@ export const mailboxAttachment = mysqlTable("mailbox_attachment", {
 	mimeType: varchar("mime_type", { length: 100 }).notNull(),
 	size: int("size").notNull(),
 	s3Key: varchar("s3_key", { length: 500 }).notNull(),
+	// NEW: Soft-link to unified asset table (nullable for backward compatibility)
+	assetId: varchar("asset_id", { length: 36 }).references(() => asset.id, { onDelete: 'set null' }),
 	createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -173,6 +178,7 @@ export const audience = mysqlTable("audience", {
 	optInForum: boolean("opt_in_forum").default(true),
 	optInChangelog: boolean("opt_in_changelog").default(true),
 	optInMentions: boolean("opt_in_mentions").default(true),
+	optInMentionMail: boolean("opt_in_mention_mail").default(true),
 	optInReplies: boolean("opt_in_replies").default(true),
 	source: varchar("source", { length: 50 }).default("landing"),
 	unsubscribedAt: timestamp("unsubscribed_at"),
@@ -341,13 +347,41 @@ export const termsAgreement = mysqlTable("terms_agreement", {
 export const asset = mysqlTable("asset", {
     id: varchar("id", { length: 36 }).primaryKey(),
     userId: varchar("user_id", { length: 36 }).notNull().references(() => user.id),
-    type: varchar("type", { length: 20 }).notNull(), // 'community_topic', 'community_reply', 'campaign', 'legal'
+    // 'community_topic', 'community_reply', 'campaign', 'legal', 'mailbox_attachment', 'email_outbound'
+    type: varchar("type", { length: 30 }).notNull(),
     targetId: varchar("target_id", { length: 36 }),
     filename: varchar("filename", { length: 255 }).notNull(),
     mimeType: varchar("mime_type", { length: 100 }).notNull(),
     size: int("size").notNull(),
     s3Key: varchar("s3_key", { length: 500 }).notNull(),
     publicUrl: text("public_url"),
+    // NEW: SHA-256 hash for deduplication
+    hash: varchar("hash", { length: 64 }),
+    // NEW: Access control — public (CDN direct), signed (CloudFront signed URL), private (backend-only)
+    visibility: varchar("visibility", { length: 10 }).default("public"), // public | signed | private
+    // NEW: Optional expiration for outbound/temp assets (garbage collection via cleanup job)
+    expiresAt: timestamp("expires_at"),
+    // NEW: S3 lifecycle tag status (pending = awaiting DB commit, validated = committed)
+    lifecycleStatus: varchar("lifecycle_status", { length: 10 }).default("validated"), // pending | validated | expired
+    createdAt: timestamp("created_at").defaultNow(),
+});
+
+/**
+ * Table de liaison pivot entre les assets et les emails (outbound).
+ * Permet qu'un même asset soit référencé par plusieurs emails de campagne
+ * sans jamais dupliquer le fichier physique sur S3.
+ * 
+ * Règle: email_queue_id XOR email_log_id (pas les deux en même temps)
+ */
+export const emailAttachment = mysqlTable("email_attachment", {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    assetId: varchar("asset_id", { length: 36 }).notNull().references(() => asset.id, { onDelete: 'cascade' }),
+    // Nullable: lié à un email planifié (avant envoi)
+    emailQueueId: varchar("email_queue_id", { length: 36 }).references(() => emailQueue.id, { onDelete: 'cascade' }),
+    // Nullable: lié à un email envoyé (après envoi)
+    emailLogId: varchar("email_log_id", { length: 36 }).references(() => emailLog.id, { onDelete: 'set null' }),
+    // Nullable: lié à une campagne entière (réutilisation massive)
+    campaignId: varchar("campaign_id", { length: 36 }).references(() => campaign.id, { onDelete: 'cascade' }),
     createdAt: timestamp("created_at").defaultNow(),
 });
 

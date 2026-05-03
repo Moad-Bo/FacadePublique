@@ -39,6 +39,32 @@ const handlePostReply = async () => {
   }
 };
 
+const handleVote = async (type: 'up' | 'down', targetId: string, isTopic: boolean) => {
+  if (!isMember.value) return;
+  
+  const target = isTopic ? thread.value : replies.value.find((r: any) => r.id === targetId);
+  if (!target) return;
+
+  // Optimistic UI
+  const originalUp = target.upvotes;
+  const originalDown = target.downvotes;
+  
+  if (type === 'up') target.upvotes++;
+  else target.downvotes++;
+
+  try {
+    await $fetch('/api/community/votes', {
+      method: 'POST',
+      body: { [isTopic ? 'topicId' : 'replyId']: targetId, type }
+    });
+  } catch (e) {
+    // Revert on error
+    target.upvotes = originalUp;
+    target.downvotes = originalDown;
+    console.error('Vote failed:', e);
+  }
+};
+
 onMounted(() => {
   checkMembership();
 });
@@ -83,9 +109,9 @@ onMounted(() => {
        <div class="flex-1 min-w-0 p-6 md:p-8 rounded-3xl border border-neutral-200/50 dark:border-neutral-800/50 bg-white dark:bg-neutral-900/40 relative">
           <!-- Upvote/Downvote Column (Floating on Thread) -->
           <div class="absolute -left-4 top-8 flex flex-col items-center gap-2 px-1.5 py-2 rounded-2xl bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 shadow-xl shadow-primary-500/5 z-10 transition-transform hover:scale-105">
-             <UButton icon="i-lucide-chevron-up" color="neutral" variant="ghost" size="xs" class="hover:text-primary-500" />
+             <UButton icon="i-lucide-chevron-up" color="neutral" variant="ghost" size="xs" class="hover:text-primary-500" @click="handleVote('up', thread.id, true)" />
              <span class="text-[11px] font-black tracking-tighter">{{ thread.upvotes - thread.downvotes }}</span>
-             <UButton icon="i-lucide-chevron-down" color="neutral" variant="ghost" size="xs" class="hover:text-error-500" />
+             <UButton icon="i-lucide-chevron-down" color="neutral" variant="ghost" size="xs" class="hover:text-error-500" @click="handleVote('down', thread.id, true)" />
           </div>
 
           <article class="prose dark:prose-invert prose-sm sm:prose-base max-w-none prose-headings:font-black prose-headings:tracking-tighter prose-a:text-primary-500 prose-code:text-primary-500 prose-pre:bg-neutral-900 prose-pre:border prose-pre:border-neutral-800">
@@ -122,9 +148,9 @@ onMounted(() => {
                 <div 
                   class="flex flex-col items-center gap-1.5 py-1 px-1 rounded-full border border-neutral-200/50 dark:border-neutral-800/50 bg-neutral-50 dark:bg-neutral-900 group-hover:bg-primary-500/5 group-hover:border-primary-500/20 transition-all"
                 >
-                   <UButton icon="i-lucide-chevron-up" variant="ghost" color="neutral" size="xs" class="text-[8px] hover:text-primary-500" />
+                   <UButton icon="i-lucide-chevron-up" variant="ghost" color="neutral" size="xs" class="text-[8px] hover:text-primary-500" @click="handleVote('up', reply.id, false)" />
                    <span class="text-[9px] font-black tracking-tighter">{{ reply.upvotes - reply.downvotes }}</span>
-                   <UButton icon="i-lucide-chevron-down" variant="ghost" color="neutral" size="xs" class="text-[8px] hover:text-error-500" />
+                   <UButton icon="i-lucide-chevron-down" variant="ghost" color="neutral" size="xs" class="text-[8px] hover:text-error-500" @click="handleVote('down', reply.id, false)" />
                 </div>
              </div>
 

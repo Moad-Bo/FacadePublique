@@ -71,24 +71,31 @@ const forumData = {
   }]
 }
 
+// FETCH REAL DATA FROM API
+const { data: metricsData, refresh: refreshMetrics } = await useFetch('/api/dashboard/metrics')
+
 // 3. CAMPAGNES KPI: Performance de l'Entonnoir
 // Logique : On suit la déperdition entre l'envoi, l'ouverture et le clic effectif
-const campaignData = {
-  labels: ['Envoyés', 'Ouverts', 'Cliqués'],
-  datasets: [{
-    label: 'Volume',
-    backgroundColor: ['#8b5cf6', '#a855f7', '#d946ef'],
-    data: [10000, 4200, 850],
-    borderRadius: 8
-  }]
-}
+const campaignData = computed(() => {
+  const stats = metricsData.value?.campaignData || { envoyes: 0, ouverts: 0, cliques: 0 }
+  return {
+    labels: ['Envoyés', 'Ouverts', 'Cliqués'],
+    datasets: [{
+      label: 'Volume',
+      backgroundColor: ['#8b5cf6', '#a855f7', '#d946ef'],
+      data: [stats.envoyes, stats.ouverts, stats.cliques],
+      borderRadius: 8
+    }]
+  }
+})
 
 // 4. ESPACE PUBLIQUE: Score de Vitalité (Mocked KPI)
 // Logique : Indice calculé basé sur (Trafic Organique / Temps de Session)
 const vitalityScore = ref(78)
-const refreshWithLoading = () => {
+const refreshWithLoading = async () => {
   loading.value = true
-  setTimeout(() => loading.value = false, 1000)
+  await refreshMetrics()
+  setTimeout(() => loading.value = false, 500)
 }
 
 </script>
@@ -117,7 +124,7 @@ const refreshWithLoading = () => {
             { label: 'Visibilité Publique', value: '8.4k', trend: '+12%', icon: 'i-lucide:eye', color: 'primary', desc: 'Vues uniques sur 24h' },
             { label: 'Conversion Blog', value: '4.2%', trend: '+0.5%', icon: 'i-lucide:trending-up', color: 'success', desc: 'Lecteurs devenus abonnés' },
             { label: 'Entraide Forum', value: '92%', trend: '+5%', icon: 'i-lucide:heart-handshake', color: 'info', desc: 'Taux de réponse < 2h' },
-            { label: 'Santé Campagne', value: '98.9%', trend: 'Stable', icon: 'i-lucide:shield-check', color: 'warning', desc: 'Taux de délivrabilité API' }
+            { label: 'Santé Campagne', value: (metricsData?.globalMetrics?.delivrability || '100') + '%', trend: 'Stable', icon: 'i-lucide:shield-check', color: 'warning', desc: 'Taux de délivrabilité API' }
           ]" :key="stat.label" class="relative overflow-hidden group">
             <div class="space-y-2">
                 <div class="flex justify-between items-start">

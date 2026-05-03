@@ -53,41 +53,6 @@ const updateProfile = async () => {
 const changeEmail = async () => {
   notify.info('Info', 'La fonctionnalité de changement d\'email sera disponible prochainement.');
 };
-
-const isUploadingAvatar = ref(false);
-const fileInputRef = ref<HTMLInputElement | null>(null);
-
-const triggerAvatarUpload = () => {
-  fileInputRef.value?.click();
-};
-
-const handleAvatarFileChange = async (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  const file = target.files?.[0];
-  if (!file) return;
-
-  isUploadingAvatar.value = true;
-  const formData = new FormData();
-  formData.append('file', file);
-
-  try {
-    const res = await $fetch<any>('/api/user/avatar', {
-      method: 'POST',
-      body: formData
-    });
-
-    if (res.success) {
-      form.image = res.url;
-      await fetchSession();
-      notify.success('Avatar mis à jour');
-    }
-  } catch (e: any) {
-    notify.error('Erreur upload', e.message);
-  } finally {
-    isUploadingAvatar.value = false;
-    if (fileInputRef.value) fileInputRef.value.value = '';
-  }
-};
 </script>
 
 
@@ -110,31 +75,29 @@ const handleAvatarFileChange = async (event: Event) => {
     <div class="max-w-2xl space-y-8">
       <UCard class="rounded-[2rem] border-neutral-200/50 dark:border-neutral-800/50 shadow-sm overflow-hidden">
         <template #header>
-          <div class="flex items-center gap-6">
-            <UAvatar
-              :src="form.image"
-              :alt="form.name"
-              size="2xl"
-              class="ring-4 ring-primary-500/10 shadow-lg"
+          <div class="flex items-center gap-10">
+            <ForgeImageProcessor 
+              v-model="form.image"
+              circle
+              label="Avatar"
+              @error="(msg) => notify.error('Upload Error', msg)"
             />
-            <div class="space-y-3">
+            
+            <div class="space-y-3 flex-1">
               <div>
-                <h3 class="font-black text-xl leading-tight">{{ form.name }}</h3>
+                <h3 class="font-black text-2xl leading-tight">{{ form.name }}</h3>
                 <p class="text-sm text-neutral-500">{{ form.email }}</p>
               </div>
-              <div class="flex items-center gap-2">
-                 <input type="file" ref="fileInputRef" class="hidden" accept="image/*" @change="handleAvatarFileChange" />
+              <div class="flex items-center gap-3">
                  <UButton 
-                  icon="i-lucide-upload" 
-                  label="Importer" 
+                  icon="i-lucide:sparkles" 
+                  label="Générer un alias" 
                   color="primary" 
-                  variant="subtle" 
+                  variant="soft" 
                   size="xs" 
-                  :loading="isUploadingAvatar"
-                  @click="triggerAvatarUpload" 
-                  class="rounded-lg font-bold" 
+                  class="rounded-xl font-bold uppercase text-[9px]" 
                  />
-                 <UButton icon="i-lucide-trash" color="error" variant="ghost" size="xs" @click="form.image = ''" class="rounded-lg" />
+                 <UBadge v-if="session?.user?.role" size="sm" variant="subtle" color="primary" class="font-black uppercase tracking-widest text-[9px]">{{ session.user.role }}</UBadge>
               </div>
             </div>
           </div>

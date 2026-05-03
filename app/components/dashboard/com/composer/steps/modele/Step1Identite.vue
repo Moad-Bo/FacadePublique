@@ -42,6 +42,8 @@ const layoutCategories = [
 
 <template>
   <div class="h-full flex flex-col p-12 animate-in fade-in slide-in-from-right-4 duration-500 overflow-y-auto scrollbar-thin">
+    <!-- DESTINATAIRE ANCHOR -->
+    <div id="forge-header" class="hidden" />
     <div class="max-w-3xl mx-auto w-full space-y-10">
 
       <!-- HEADER -->

@@ -165,6 +165,26 @@ const tips = [
                     <UButton icon="i-lucide-italic" variant="ghost" color="neutral" size="xs" />
                     <UButton icon="i-lucide-code" variant="ghost" color="neutral" size="xs" />
                     <div class="h-4 w-px bg-neutral-200 dark:bg-neutral-800 mx-1" />
+                    
+                    <!-- NEW INTEGRATED PROCESSOR -->
+                    <ForgeImageProcessor 
+                      v-model="attachments" 
+                      @upload:end="(asset) => { if(!attachments.some(a => a.id === asset.id)) attachments.push(asset) }"
+                      class="!flex-row !gap-1"
+                    >
+                      <template #default="{ trigger, isProcessing }">
+                         <UButton 
+                          icon="i-lucide:image" 
+                          variant="ghost" 
+                          color="neutral" 
+                          size="xs" 
+                          label="Image" 
+                          :loading="isProcessing"
+                          @click="trigger" 
+                         />
+                      </template>
+                    </ForgeImageProcessor>
+
                     <input type="file" ref="fileInput" class="hidden" multiple @change="handleFileChange" />
                     <UButton 
                       icon="i-lucide-paperclip" 
@@ -173,6 +193,7 @@ const tips = [
                       size="xs" 
                       :loading="isUploading"
                       @click="triggerUpload"
+                      label="Fichier"
                     />
                     <div class="h-4 w-px bg-neutral-200 dark:bg-neutral-800 mx-1" />
                     <UButton label="Preview" icon="i-lucide-eye" :variant="showPreview ? 'solid' : 'ghost'" color="primary" size="xs" @click="showPreview = !showPreview" />

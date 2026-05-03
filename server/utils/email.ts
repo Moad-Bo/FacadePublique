@@ -437,6 +437,8 @@ export async function sendBatchCampaign(options: {
 
   let totalSent = 0;
   let firstMailgunMessageId: string | undefined;
+  const batchLogId = randomUUID(); // parent log id
+  let parentInserted = false;
 
   for (const chunk of chunks) {
     // Construction des recipient-variables : 1 objet JSON par destinataire
@@ -472,6 +474,23 @@ export async function sendBatchCampaign(options: {
 
       totalSent += chunk.length;
       console.info(`[BATCH] ✅ Chunk envoyé: ${chunk.length} destinataires via ${fromAddress} (contexte: ${context}) | MG-ID: ${mailgunId}`);
+
+      // Insert parent batch log if not done yet
+      if (!parentInserted) {
+        await db.insert(emailLog).values({
+          id: batchLogId,
+          recipient: '__batch__',
+          fromAlias: fromAddress,
+          subject: subject,
+          template: 'batch',
+          type: 'campaign_batch', // Special type for parent row
+          status: 'sent',
+          messageId: mailgunId,
+          campaignId: campaignId || context, // Used to link children logs
+          sentAt: new Date()
+        });
+        parentInserted = true;
+      }
     } catch (chunkErr: any) {
       console.error(`[BATCH] ❌ Échec chunk (${chunk.length} destinataires):`, chunkErr.message);
       // On continue avec les autres chunks même si un échoue

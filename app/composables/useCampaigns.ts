@@ -19,7 +19,7 @@ export const CAMPAIGN_TYPES = [
         color: 'info' as const,
         description: 'Notes de mise à jour produit & nouvelles fonctionnalités.',
         alias: 'Techknè Changelog',
-        optInField: 'optInNewsletter' as const,
+        optInField: 'optInChangelog' as const,
         fromEnvKey: 'mailDomainCampaignChangelog',
     },
     {

@@ -26,6 +26,17 @@ const emit = defineEmits(['toggle-fullscreen'])
 
 // --- NAVIGATION ---
 const totalSteps = computed(() => currentModeConfig.value.steps.length)
+
+const scrollToDestinataire = () => {
+  const el = document.getElementById('forge-header')
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const input = el.querySelector('input')
+    if (input) input.focus()
+  } else {
+    notify.info('Note', 'Le champ destinataire est accessible dans la phase de configuration.')
+  }
+}
 const currentStep = computed(() => currentModeConfig.value.steps[composerStep.value - 1])
 
 const nextStep = () => {
@@ -130,6 +141,18 @@ const getNextLabel = computed(() => {
              class="min-w-32 font-bold" 
            />
         </div>
+
+        <!-- DESTINATAIRE BUTTON (New) -->
+        <UButton
+          v-if="['Webmailing', 'Campagnes', 'Modèles Studio'].includes(currentModeConfig.label)"
+          label="Destinataire"
+          icon="i-lucide:users"
+          variant="soft"
+          color="primary"
+          size="xs"
+          class="ml-2 font-black uppercase text-[9px] rounded-xl"
+          @click="scrollToDestinataire"
+        />
       </div>
 
       <!-- Center Focus: Stepper Progress -->
